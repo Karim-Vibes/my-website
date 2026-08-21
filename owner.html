@@ -10685,7 +10685,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                 const reporter = report && report.supervisor ? report.supervisor : '<span style="color:var(--text-muted);">-</span>';
                 const feedUsed = report ? (parseFloat(report.todayFeed) || 0) : 0;
                 
-                const quota = mapQuotas[shed.id] || shed.dailyQuota;
+                const quota = Number(mapQuotas[shed.id] ?? shed.dailyQuota ?? 0);
                 const supplier = mapSuppliers[shed.id] || shed.supplier;
                 
                 // ⚠️ إصلاح الإنذار: رصيد العلف ياخد من الرصيد الرسمي المحدث من Supabase
@@ -10885,7 +10885,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
 
                 // ⚠️ تلوين ذكي للجدول الرئيسي (من غير أي إشعارات — للرؤية بس):
                 // 1) العلفة اليومية: لو المشرف بلّغ رقم غير العلفة المعتمدة (أقل أو أزيد) → أحمر
-                const feedMismatch = feedUsed > 0 && Math.abs(Number(feedUsed) - Number(quota)) > 0.01;
+                const feedMismatch = feedUsed > 0 && Number(quota) > 0 && Math.abs(Number(feedUsed) - Number(quota)) > 0.01;
                 // 2) رصيد الكرتون: اللفة = 89 طبق (ثابت — مفيش هالك). لو المتاح أقل من تغطية يومين إنتاج → أحمر
                 const cartonAvailableTrays = Number(cartonStock) * 89; // لفة = 89 طبق
                 const todayProdTrays = eggWhite + eggRed;
@@ -10900,14 +10900,14 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                     </td>
                     <td style="color:#2563eb !important; font-weight:700;">${reporter}</td>
                     
-                    <td style="font-weight:700; ${feedMismatch ? 'color:#dc2626;' : ''}">
-                        ${feedUsed > 0 ? feedUsed + ' شكارة' : '-'}
+                    <td style="${feedMismatch ? 'color:#b91c1c !important; background:#fee2e2 !important; font-weight:800;' : 'font-weight:700;'}">
+                        ${feedUsed > 0 ? (feedMismatch ? '⚠ ' : '') + feedUsed + ' شكارة' : '-'}
                     </td>
 
                     <td style="font-weight:700;">${eggWhite > 0 ? eggWhite : '-'}</td>
                     <td style="font-weight:700; color:var(--warning);">${eggRed > 0 ? eggRed : '-'}</td>
-                    <td style="${dead > 0 ? 'color:var(--danger); font-weight:700;' : ''}">
-                        ${dead > 0 ? dead + ' نافق' : 'لا يوجد'}
+                    <td style="${dead > 0 ? 'color:#b91c1c !important; background:#fee2e2 !important; font-weight:800;' : ''}">
+                        ${dead > 0 ? '⚠ ' + dead + ' نافق' : 'لا يوجد'}
                     </td>
                     
                     <td>${tags.length > 0 ? tags.join(' ') : '<span style="color:var(--text-muted);">-</span>'}</td>
