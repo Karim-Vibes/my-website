@@ -140,7 +140,7 @@ body:not(.mz-ready) #splashScreen{visibility:visible}
   }catch(e){}
 })();
 </script>
-<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — Cycle Management 37</title>
+<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — Empty Sacks Full Sync 39</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 
@@ -7873,7 +7873,32 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                 alert('اكتب سعر صحيح (أكبر من صفر) أولاً.');
                 return;
             }
-            if (!confirm('⚠️ هل أنت متأكد من تأكيد هذا البيع بسعر ' + price.toLocaleString('ar-EG') + ' ج.م؟\n\nسيتم إضافة الإيراد للعنبر' + (input.closest('#requests-sebla-list') ? ' ودين على تاجر السبلة' : ' وخصم الكمية من رصيد الشكاير') + ' فوراً.')) return;
+
+            const sales = (farmtyAdminState && farmtyAdminState.otherSales) || [];
+            const sale = sales.find(x => Number(x.id) === Number(saleId));
+            const isSacksSale = String(sale?.sale_type || '') === 'شكاير فارغة';
+
+            // فحص قراءة فقط قبل التأكيد: يمنع بيع كمية أكبر من الرصيد الحالي.
+            if (isSacksSale) {
+                try {
+                    const stockRes = await sbClient.from(FARMITY_ADMIN_TABLES.sheds)
+                        .select('empty_sacks_stock')
+                        .eq('id', Number(sale.shed_id))
+                        .single();
+                    if (stockRes.error) throw stockRes.error;
+                    const available = farmtyAdminNum(stockRes.data?.empty_sacks_stock);
+                    if (farmtyAdminNum(sale.qty) > available) {
+                        alert(`لا يمكن تأكيد البيع: رصيد الشكاير الفارغة الحالي ${available.toLocaleString('ar-EG')} والمطلوب ${farmtyAdminNum(sale.qty).toLocaleString('ar-EG')}.`);
+                        return;
+                    }
+                } catch (stockError) {
+                    console.error('empty sacks stock check:', stockError);
+                    showMiniToast('تعذر قراءة رصيد الشكاير؛ لم يتم تأكيد البيع', 'red');
+                    return;
+                }
+            }
+
+            if (!confirm('⚠️ هل أنت متأكد من تأكيد هذا البيع بسعر ' + price.toLocaleString('ar-EG') + ' ج.م؟\n\nسيتم إضافة الإيراد للعنبر' + (isSacksSale ? ' وخصم الكمية من رصيد الشكاير' : ' ودين على تاجر السبلة') + ' فوراً.')) return;
 
             try {
                 const { error } = await sbClient.rpc('mazraaty_confirm_other_sale', {
@@ -7882,15 +7907,34 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                     p_confirmed_by: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
                 });
                 if (error) throw error;
-                // تحديث محلي فوري
-                const sales = (farmtyAdminState && farmtyAdminState.otherSales) || [];
-                const s = sales.find(x => Number(x.id) === Number(saleId));
-                if (s) { s.status = 'confirmed'; s.unit_price = price; s.total_amount = farmtyAdminNum(s.qty) * price; }
+
+                if (sale) { sale.status = 'confirmed'; sale.unit_price = price; sale.total_amount = farmtyAdminNum(sale.qty) * price; }
+
+                let successMessage = 'تم تأكيد البيع — الإيراد نزل على العنبر';
+                // قراءة مستهدفة بعد البيع لتحديث المالك فوراً بنفس الرصيد الرسمي.
+                if (isSacksSale) {
+                    const afterRes = await sbClient.from(FARMITY_ADMIN_TABLES.sheds)
+                        .select('empty_sacks_stock')
+                        .eq('id', Number(sale.shed_id))
+                        .single();
+                    if (!afterRes.error) {
+                        const remaining = farmtyAdminNum(afterRes.data?.empty_sacks_stock);
+                        const ownerShed = ownerDefaultSheds.find(x => Number(x.id) === Number(sale.shed_id));
+                        if (ownerShed) ownerShed.emptySacksStock = remaining;
+                        const barn = barns.find(x => Number(x.id) === Number(sale.shed_id));
+                        if (barn) barn.emptySacksStock = remaining;
+                        if (typeof ownerRenderDashboard === 'function') ownerRenderDashboard();
+                        successMessage += ` — المتبقي ${remaining.toLocaleString('ar-EG')} شيكارة`;
+                    } else {
+                        console.warn('post-sale empty sacks refresh:', afterRes.error);
+                    }
+                }
+
                 if (typeof mzApplyExtraData === 'function') mzApplyExtraData();
                 if (typeof ownerRenderRequests === 'function') ownerRenderRequests();
                 if (typeof scheduleAdminReload === 'function') scheduleAdminReload();
                 if (typeof mzLoadExtraData === 'function') mzLoadExtraData();
-                showMiniToast('تم تأكيد البيع — الإيراد نزل على العنبر', 'green');
+                showMiniToast(successMessage, 'green');
             } catch (error) {
                 console.error('ownerConfirmOtherSale error:', error);
                 showMiniToast('تعذر التأكيد: ' + (error.message || error), 'red');
@@ -10961,10 +11005,10 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                     }
                 } catch (e) { /* تجاهل */ }
 
-                // رصيد الشكاير الفارغة: من تقرير اليوم إن وجد، وإلا من جدول العنابر
-                const emptySacksStock = report && report.emptySacksStock !== undefined
-                    ? (parseFloat(report.emptySacksStock) || 0)
-                    : ((shed.emptySacksStock !== undefined) ? shed.emptySacksStock : 0);
+                // رصيد الشكاير الفارغة الحي من جدول العنابر الرسمي؛ التقرير لقطة وقت الإرسال فقط.
+                const emptySacksStock = (shed.emptySacksStock !== undefined)
+                    ? farmtyAdminNum(shed.emptySacksStock)
+                    : (report && report.emptySacksStock !== undefined ? (parseFloat(report.emptySacksStock) || 0) : 0);
 
                 // الإيراد = مبيعات البيض المؤكدة + السبلة + الشكاير الفارغة + إيراد سحب العلف/الكرتون
                 const withdrawalIncome = report ? (parseFloat(report.incomeFeed) || 0) + (parseFloat(report.incomeCarton) || 0) : 0;
@@ -12121,6 +12165,8 @@ function applyShedsToRuntime() {
       ownerShed.eggStock = farmtyAdminNum(row.egg_stock);
       ownerShed.eggStockWhite = farmtyAdminNum(row.egg_stock_white);
       ownerShed.eggStockRed = farmtyAdminNum(row.egg_stock_red);
+      // رصيد الشكاير الفارغة الحي من جدول العنابر الرسمي.
+      ownerShed.emptySacksStock = farmtyAdminNum(row.empty_sacks_stock);
       // العمر الفعلي: المسجل + الأيام من تاريخ التسجيل (زيادة يومية تلقائية)
       ownerShed.age = ownerEffectiveAge(shedId, farmtyAdminNum(row.age_days), row.age_reference_date);
       ownerShed.eggRate = `${farmtyAdminNum(row.egg_rate)}%`;
@@ -17165,5 +17211,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f5b66f0aebef9a',t:'MTc4NzQ0MTkyMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f606e76e02e27a',t:'MTc4NzQ0NTIxOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

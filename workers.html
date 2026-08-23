@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين — Egg Deduction Fix 2</title>
+    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين — Safe Report Editing 19</title>
     <!-- Font Awesome & Google Fonts -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -3125,10 +3125,13 @@ function computeStockDisplays() {
         baseEgg = farmtyNum(shed.eggStock) - farmtyNum(rep.egg_white) - farmtyNum(rep.egg_red);
         baseEggWhite = farmtyNum(shed.eggWhite) - farmtyNum(rep.egg_white);
         baseEggRed = farmtyNum(shed.eggRed) - farmtyNum(rep.egg_red);
-        baseFeed = farmtyNum(rep.feed_stock) - farmtyNum(rep.incoming_feed) + farmtyNum(rep.feed_used) + farmtyNum(rep.feed_withdrawn_qty);
-        // نرجع كمان لفات الكرتون المستهلكة من إنتاج التقرير المحفوظ (89 طبق = لفة، نسبة دقيقة)
+        // العلف والكرتون يبدأان من الرصيد الرسمي الحالي، ثم نلغي أثر القيم القديمة
+        // ونطبق القيم الجديدة فقط؛ فلا يعيد تعديل التقرير رصيدًا قديمًا فوق تحويل/استهلاك لاحق.
+        baseFeed = farmtyNum(shed.feedSacks) - farmtyNum(rep.incoming_feed)
+            + farmtyNum(rep.feed_used) + farmtyNum(rep.feed_withdrawn_qty);
         const savedConsumed = (farmtyNum(rep.egg_white) + farmtyNum(rep.egg_red)) / CARTON_TRAYS_PER_ROLL;
-        baseCarton = farmtyNum(rep.carton_stock) - farmtyNum(rep.incoming_cartons) + farmtyNum(rep.carton_withdrawn_qty) + savedConsumed;
+        baseCarton = farmtyNum(shed.cartonStock) - farmtyNum(rep.incoming_cartons)
+            + farmtyNum(rep.carton_withdrawn_qty) + savedConsumed;
     } else {
         baseEgg = farmtyNum(shed.eggStock);
         // الرصيد الدائم الأبيض/الأحمر من جدول العنابر (مبيتصفرش مع اليوم الجديد)
@@ -3143,18 +3146,13 @@ function computeStockDisplays() {
     // رصيد الأحمر = رصيده في بداية اليوم + إنتاج الأحمر اليوم
     const eggRed = Math.max(0, baseEggRed + num('p1-egg-red'));
     const egg = Math.max(0, baseEgg + num('p1-egg-white') + num('p1-egg-red'));
-    // الشكاير الفارغة: الرصيد الحالي + العلفة المستهلكة اليوم (كل شيكارة علف = شيكارة فارغة)
-    // تُطرح منها مبيعات الشكاير الفارغة المسجلة اليوم (من جدول المبيعات الإضافية)
-    let soldSacksToday = 0;
-    try {
-        if (typeof farmtySupervisorState !== 'undefined' && farmtySupervisorState.otherSales) {
-            const todayS = getTodayKey();
-            farmtySupervisorState.otherSales
-                .filter(s => String(s.sale_date) === todayS && s.sale_type === 'شكاير فارغة' && Number(s.shed_id) === Number(shed.id))
-                .forEach(s => { soldSacksToday += farmtyNum(s.qty); });
-        }
-    } catch (e) { /* تجاهل */ }
-    const emptySacks = Math.max(0, (rep ? farmtyNum(rep.empty_sacks_stock) : farmtyNum(shed.emptySacksStock)) + num('p1-feed-used') - soldSacksToday);
+    // رصيد الشكاير الفارغة الرسمي يتغير في حالتين فقط:
+    // 1) فرق تعديل العلفة في التقرير (كل شيكارة مستخدمة = شيكارة فارغة).
+    // 2) خصم البيع عند موافقة المالك — وهذا تم بالفعل داخل رصيد العنبر الرسمي.
+    // لذلك لا نطرح مبيعات اليوم هنا مرة ثانية، ولا نرجع لرصيد التقرير القديم.
+    const savedFeedUsedForSacks = rep ? farmtyNum(rep.feed_used) : 0;
+    const feedUsedDeltaForSacks = num('p1-feed-used') - savedFeedUsedForSacks;
+    const emptySacks = Math.max(0, farmtyNum(shed.emptySacksStock) + feedUsedDeltaForSacks);
     // الرصيد المتاح قبل خصم المسحوبات (للفحص: منع السحب بالسالب)
     const feedBeforeOut = Math.max(0, baseFeed
         + (isExist('p1-feed-add-status') ? num('p1-feed-add-count') : 0)
@@ -3614,17 +3612,21 @@ function buildReportPayload(shedId, dateKey = getTodayKey()) {
         incoming_cartons: isExist('p1-carton-add-status') ? num('p1-carton-add-count') : 0,
         incoming_sawdust: isExist('p1-sawdust-add-status') ? num('p1-sawdust-add-count') : 0,
         incoming_meds: isExist('p1-meds-add-status') ? 'يوجد' : '',
-        // ===== بنود التكاليف الإضافية: القيم يحددها المحاسب عند الاعتماد — المشرف يحدد النوع والملاحظة فقط =====
-        gas_cost: 0,
-        electricity_cost: 0,
-        maintenance_type: isExist('p1-maintenance-status') ? document.getElementById('p1-maintenance-type').value : '',
-        maintenance_cost: 0,
-        spare_parts_note: isExist('p1-spare-status') ? document.getElementById('p1-spare-note').value.trim() : '',
-        spare_parts_cost: 0,
-        external_labor_type: isExist('p1-labor-status') ? document.getElementById('p1-labor-type').value : '',
-        external_labor_cost: 0,
-        other_expenses: 0,
-        other_expenses_note: isExist('p1-other-exp-status') ? document.getElementById('p1-other-exp-note').value.trim() : '',
+        // ===== تكاليف اعتمدها المالك/المحاسب: نحافظ عليها عند تعديل تقرير المشرف =====
+        // المشرف يغيّر الوصف فقط؛ القيمة المالية لا تُمسح ولا تُعاد للصفر.
+        gas_cost: farmtyNum(existing?.gas_cost),
+        electricity_cost: farmtyNum(existing?.electricity_cost),
+        maintenance_type: isExist('p1-maintenance-status') ? document.getElementById('p1-maintenance-type').value : (existing?.maintenance_type || ''),
+        maintenance_cost: farmtyNum(existing?.maintenance_cost),
+        spare_parts_note: isExist('p1-spare-status') ? document.getElementById('p1-spare-note').value.trim() : (existing?.spare_parts_note || ''),
+        spare_parts_cost: farmtyNum(existing?.spare_parts_cost),
+        external_labor_type: isExist('p1-labor-status') ? document.getElementById('p1-labor-type').value : (existing?.external_labor_type || ''),
+        external_labor_cost: farmtyNum(existing?.external_labor_cost),
+        other_expenses: farmtyNum(existing?.other_expenses),
+        other_expenses_note: isExist('p1-other-exp-status') ? document.getElementById('p1-other-exp-note').value.trim() : (existing?.other_expenses_note || ''),
+        meds_cost: farmtyNum(existing?.meds_cost),
+        complaint_cost: farmtyNum(existing?.complaint_cost),
+        vaccine_cost: farmtyNum(existing?.vaccine_cost),
         // ===== رصيد الشكاير الفارغة (يتراكم من العلفة اليومية) =====
         empty_sacks_stock: farmtyNum(document.getElementById('p1-empty-sacks')?.value || 0),
         // سعر التوريد يُخزن تلقائياً من أسعار السوق ليوم التوريد — المشرف لا يدخل أي سعر
@@ -3712,35 +3714,60 @@ async function sendCostRequestsToAccountant(shedId, dateKey) {
     if (isExist('p1-labor-status')) requests.push({ type: 'عمالة خارجية', note: document.getElementById('p1-labor-type').value });
     if (isExist('p1-other-exp-status')) requests.push({ type: 'مصروفات أخرى', note: document.getElementById('p1-other-exp-note').value.trim() });
     if (!requests.length) return;
+
+    // منع تكرار نفس طلب التكلفة عند إعادة حفظ التقرير.
+    let existingTypes = new Set();
+    try {
+        const { data, error } = await sbClient.from('mazraaty_cost_requests')
+            .select('cost_type,status')
+            .eq('report_date', dateKey)
+            .eq('shed_id', Number(shedId))
+            .in('status', ['open', 'approved']);
+        if (error) throw error;
+        existingTypes = new Set((data || []).map(x => String(x.cost_type || '')));
+    } catch (e) {
+        console.warn('cost request duplicate check error:', e);
+        return; // فشل الفحص = لا نرسل طلبات جديدة حتى لا نكررها.
+    }
+
     for (const r of requests) {
+        if (existingTypes.has(r.type)) continue;
         try {
-            await sbClient.rpc('mazraaty_request_cost', {
+            const { error } = await sbClient.rpc('mazraaty_request_cost', {
                 p_report_date: dateKey,
                 p_shed_id: Number(shedId),
                 p_supervisor: supervisor,
                 p_cost_type: r.type,
                 p_cost_note: r.note
             });
+            if (error) throw error;
+            existingTypes.add(r.type);
         } catch (e) { console.warn('cost request error:', e); }
     }
 }
 
 // النسخة الجديدة: تحفظ في Supabase، وتحتفظ بنسخة محلية احتياطية فقط.
 saveTodayReportData = async function(shedId, dateKey = getTodayKey()) {
-    const payload = buildReportPayload(shedId, dateKey);
-    farmtyLegacySaveTodayReportData(shedId, dateKey);
-
-    // النافق القديم في تقرير نفس اليوم (قبل الحفظ — لحساب فرق الخصم بشكل صحيح)
-    let oldDead = 0;
+    // نقرأ آخر نسخة من التقرير قبل بناء Payload؛ قد يكون المحاسب/الصيدلية
+    // أضافوا تكاليف بعد ما المشرف فتح الصفحة، ولا يجوز أن نمسحها عند الحفظ.
+    let oldCloudRow = farmtySupervisorState.reports.get(`${Number(shedId)}|${dateKey}`) || null;
     try {
-        const { data: oldRow } = await sbClient
+        const { data: oldRow, error: oldError } = await sbClient
             .from(FARMITY_TABLES.reports)
-            .select('dead_count')
+            .select('*')
             .eq('report_date', dateKey)
             .eq('shed_id', Number(shedId))
             .maybeSingle();
-        oldDead = farmtyNum(oldRow?.dead_count);
-    } catch (e) { console.error('old dead fetch error:', e); }
+        if (oldError) throw oldError;
+        oldCloudRow = oldRow || null;
+        if (oldCloudRow) {
+            farmtySupervisorState.reports.set(`${Number(shedId)}|${dateKey}`, oldCloudRow);
+        }
+    } catch (e) { console.error('latest report fetch error:', e); }
+
+    const payload = buildReportPayload(shedId, dateKey);
+    const oldDead = farmtyNum(oldCloudRow?.dead_count);
+    farmtyLegacySaveTodayReportData(shedId, dateKey);
 
     let { data, error } = await sbClient
         .from(FARMITY_TABLES.reports)
@@ -3842,19 +3869,20 @@ saveTodayReportData = async function(shedId, dateKey = getTodayKey()) {
     // إرسال طلبات التكاليف المعلنة لقسم المحاسب (القيمة يحددها المحاسب)
     try { await sendCostRequestsToAccountant(Number(shedId), dateKey); } catch (e) { console.warn(e); }
 
-    // تسجيل النافق تلقائياً على الدورة النشطة للعنبر (لو في دورة)
-    // — أول ما التقرير يتسجل وفيه نافق، يضاف لسجل نافق الدورة ويخصم من المتبقي
+    // مزامنة نافق التقرير مع الدورة بشكل Idempotent: نفس التقرير يُمثل رقمًا واحدًا
+    // حتى عند إعادة الحفظ أو تقليل النافق إلى صفر (الدالة في SQL v4 تعدّل بدل التكرار).
     try {
         const deadNow = farmtyNum(payload.dead_count);
-        if (deadNow > 0 && typeof sbClient !== 'undefined' && sbClient) {
-            await sbClient.rpc('mazraaty_auto_mortality_from_report', {
+        if (typeof sbClient !== 'undefined' && sbClient) {
+            const { error: mortalitySyncError } = await sbClient.rpc('mazraaty_auto_mortality_from_report', {
                 p_shed_id: Number(shedId),
                 p_date: dateKey,
                 p_count: deadNow,
                 p_note: 'نافق تلقائي من تقرير اليوم'
             });
+            if (mortalitySyncError) throw mortalitySyncError;
         }
-    } catch (mortErr) { console.warn('auto mortality error:', mortErr); }
+    } catch (mortErr) { console.warn('auto mortality sync error:', mortErr); }
 
     // خصم النافق مرة واحدة بشكل دائم من العدد الكلي للفراخ (الفرق فقط)
     await adjustBirdsForDead(Number(shedId), dateKey, farmtyNum(payload.dead_count), oldDead);
@@ -3880,12 +3908,14 @@ saveTodayReportData = async function(shedId, dateKey = getTodayKey()) {
                 shed.feedSacks = balances.feedBeforeOut;
                 shed.cartonStock = balances.cartonBeforeOut;
                 shed.eggStock = farmtyNum(payload.egg_stock);
+                shed.emptySacksStock = farmtyNum(payload.empty_sacks_stock);
             } else {
                 shed.feedSacks = farmtyNum(payload.feed_stock);
                 shed.eggStock = farmtyNum(payload.egg_stock);
                 shed.eggWhite = farmtyNum(payload.egg_stock_white);
                 shed.eggRed = farmtyNum(payload.egg_stock_red);
                 shed.cartonStock = farmtyNum(payload.carton_stock);
+                shed.emptySacksStock = farmtyNum(payload.empty_sacks_stock);
             }
         }
         renderShedGrids();
@@ -4995,5 +5025,5 @@ checkPassword = async function() {
 };
 
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f58c416d330d4b',t:'MTc4NzQ0MDE5NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f60edf7bc4e27a',t:'MTc4NzQ0NTU0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
