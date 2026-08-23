@@ -140,7 +140,7 @@ body:not(.mz-ready) #splashScreen{visibility:visible}
   }catch(e){}
 })();
 </script>
-<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض</title>
+<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — Cycle Management 37</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 
@@ -4423,17 +4423,18 @@ window.MZ_SESSION = 'mz_session_v2';
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
       <div>
         <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:4px;">العدد الحالي عند البيع: <span style="color:#dc2626;">*</span></label>
-        <input type="number" id="cyclesCloseFinal" placeholder="0" min="0" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;">
+        <input type="number" id="cyclesCloseFinal" placeholder="0" min="0" oninput="cyclesCloseUpdatePreview()" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;">
       </div>
       <div>
         <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:4px;">سعر بيع الفرخة (ج.م): <span style="color:#dc2626;">*</span></label>
-        <input type="number" id="cyclesClosePrice" placeholder="0" min="0" step="0.01" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;">
+        <input type="number" id="cyclesClosePrice" placeholder="0" min="0" step="0.01" oninput="cyclesCloseUpdatePreview()" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;">
       </div>
       <div style="grid-column:1/-1;">
         <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:4px;">سبب الإنهاء (اختياري):</label>
         <input type="text" id="cyclesCloseReason" placeholder="مثال: انتهت الدورة / بيع القطيع" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:700;">
       </div>
     </div>
+    <div id="cyclesCloseSalePreview" style="margin-top:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px; padding:11px 14px; color:#166534; font-weight:900; text-align:center;">إيراد بيع الفراخ: 0 ج.م</div>
     <button onclick="cyclesCloseSubmit()" style="margin-top:16px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:900; font-size:0.95rem; cursor:pointer; width:100%;">
       🏁 تأكيد التصفية وحساب الصافي
     </button>
@@ -4568,8 +4569,8 @@ window.MZ_SESSION = 'mz_session_v2';
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
             <div style="font-weight:900; font-size:1.1rem; color:#0f172a;" id="cycleDashTitle">لوحة تحكم الدورة</div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button onclick="mortalityOpenModal()" style="background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border:none; border-radius:10px; padding:9px 16px; font-weight:900; font-size:0.85rem; cursor:pointer;">
-                ➕ إضافة نافق
+              <button onclick="cycleEditOpen()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; border:none; border-radius:10px; padding:9px 16px; font-weight:900; font-size:0.85rem; cursor:pointer;">
+                ✏️ تعديل الدورة
               </button>
             </div>
           </div>
@@ -4604,7 +4605,6 @@ window.MZ_SESSION = 'mz_session_v2';
               <div style="font-size:0.75rem; font-weight:800; color:#a5f3fc;">متوسط الوزن</div>
               <div style="font-size:1.2rem; font-weight:900; margin-top:3px;">
                 <span id="cdWeight">0</span> جم
-                <button onclick="shedEditWeight()" title="تعديل متوسط الوزن" style="background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:7px; padding:3px 8px; font-weight:800; cursor:pointer; font-size:0.72rem; color:#fff; margin-right:4px;">✎</button>
               </div>
             </div>
             <div style="background:linear-gradient(135deg,#f59e0b,#d97706); border-radius:14px; padding:14px; color:#fff; box-shadow:0 6px 16px rgba(245,158,11,.25);">
@@ -4715,9 +4715,17 @@ window.MZ_SESSION = 'mz_session_v2';
         <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:4px;">سعر الكتكوت (ج.م):</label>
         <input type="number" id="shedCyclePrice" placeholder="0" min="0" step="0.01" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;">
       </div>
-      <div>
-        <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:4px;">المشرفين:</label>
-        <input type="text" id="shedCycleSup" placeholder="مثال: عم مجدي" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-weight:700;">
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82rem; font-weight:800; display:block; margin-bottom:5px;">المشرفون:</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <select id="shedCycleSupervisorSelect" style="flex:1; min-width:210px; padding:9px 11px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;"></select>
+          <button type="button" onclick="shedCycleAddSupervisor(false)" style="background:#2563eb; color:#fff; border:none; border-radius:9px; padding:9px 14px; font-weight:900; cursor:pointer;">إضافة المختار</button>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <input id="shedCycleSupervisorManual" type="text" placeholder="اسم مشرف غير موجود" style="flex:1; min-width:210px; padding:9px 11px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;">
+          <button type="button" onclick="shedCycleAddSupervisor(true)" style="background:#0f766e; color:#fff; border:none; border-radius:9px; padding:9px 14px; font-weight:900; cursor:pointer;">إضافة الاسم</button>
+        </div>
+        <div id="shedCycleSelectedSupervisors" style="display:flex; gap:7px; flex-wrap:wrap; margin-top:10px;"></div>
       </div>
     </div>
     <div style="font-weight:900; font-size:0.92rem; color:#0f172a; margin-bottom:8px;">توزيع الكتاكيت على الأدوار (عدد الأدوار: <span id="shedCycleFloorCount">1</span>)</div>
@@ -4733,6 +4741,78 @@ window.MZ_SESSION = 'mz_session_v2';
     <div style="display:flex; gap:10px; margin-top:16px;">
       <button onclick="shedCycleCreate()" style="flex:1; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border:none; border-radius:12px; padding:12px; font-weight:900; cursor:pointer;">💾 حفظ الدورة</button>
       <button onclick="shedCloseCycleModal()" style="flex:1; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:12px; padding:12px; font-weight:800; cursor:pointer;">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال تعديل الدورة الحالية -->
+<div id="cycleEditModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.58); z-index:10020; align-items:center; justify-content:center; padding:18px;">
+  <div style="background:#fff; border-radius:20px; max-width:920px; width:100%; padding:22px; box-shadow:0 30px 80px rgba(0,0,0,.35); max-height:92vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px;">
+      <div style="font-weight:900; font-size:1.15rem; color:#0f172a;">✏️ تعديل الدورة الحالية — <span id="cycleEditTitle"></span></div>
+      <button onclick="cycleEditClose()" style="background:#f1f5f9; border:none; width:34px; height:34px; border-radius:10px; cursor:pointer; font-weight:900; color:#475569;">✕</button>
+    </div>
+    <div id="cycleEditError" style="display:none; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:11px; padding:10px 13px; margin-bottom:12px; font-size:.84rem; font-weight:800;"></div>
+    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:11px; padding:10px 13px; margin-bottom:14px; color:#1e3a8a; font-size:.82rem; font-weight:700; line-height:1.7;">
+      تعدّل هنا بيانات الدورة والقطيع فقط. الإنتاج والعلف والمصروفات والإيرادات وصافي الربح بيانات محسوبة من الحركات الفعلية ولا يتم تعديلها يدويًا.
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:16px;">
+      <label style="font-size:.8rem; font-weight:900; color:#334155;">تاريخ بداية الدورة
+        <input type="date" id="cycleEditDate" style="width:100%; margin-top:5px; padding:10px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;">
+      </label>
+      <label style="font-size:.8rem; font-weight:900; color:#334155;">السلالة / نوع الفرخ
+        <input type="text" id="cycleEditBreed" style="width:100%; margin-top:5px; padding:10px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;">
+      </label>
+      <label style="font-size:.8rem; font-weight:900; color:#334155;">المورد المعتمد
+        <select id="cycleEditSupplier" style="width:100%; margin-top:5px; padding:10px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;"></select>
+      </label>
+      <label style="font-size:.8rem; font-weight:900; color:#334155;">سعر الكتكوت (ج.م)
+        <input type="number" id="cycleEditChickPrice" min="0" step="0.01" oninput="cycleEditRecalculate()" style="width:100%; margin-top:5px; padding:10px; border:1px solid #cbd5e1; border-radius:9px; font-weight:800;">
+      </label>
+      <label style="font-size:.8rem; font-weight:900; color:#334155;">متوسط الوزن الحالي (جم)
+        <input type="number" id="cycleEditAvgWeight" min="0" step="0.01" style="width:100%; margin-top:5px; padding:10px; border:1px solid #cbd5e1; border-radius:9px; font-weight:800;">
+      </label>
+    </div>
+
+    <div style="border:1px solid #e2e8f0; border-radius:13px; padding:13px; margin-bottom:16px;">
+      <div style="font-weight:900; color:#0f172a; margin-bottom:9px;">👷 المشرفون على العنبر والدورة</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:9px;">
+        <select id="cycleEditSupervisorSelect" style="flex:1; min-width:210px; padding:9px 11px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;"></select>
+        <button type="button" onclick="cycleEditAddSupervisor(false)" style="background:#2563eb; color:#fff; border:none; border-radius:9px; padding:9px 14px; font-weight:900; cursor:pointer;">إضافة المختار</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input id="cycleEditSupervisorManual" type="text" placeholder="اسم مشرف غير موجود في القائمة" style="flex:1; min-width:210px; padding:9px 11px; border:1px solid #cbd5e1; border-radius:9px; font-weight:700;">
+        <button type="button" onclick="cycleEditAddSupervisor(true)" style="background:#0f766e; color:#fff; border:none; border-radius:9px; padding:9px 14px; font-weight:900; cursor:pointer;">إضافة الاسم</button>
+      </div>
+      <div id="cycleEditSelectedSupervisors" style="display:flex; gap:7px; flex-wrap:wrap; margin-top:11px;"></div>
+      <div style="font-size:.73rem; color:#64748b; font-weight:700; margin-top:7px;">اضغط × على أي اسم لحذفه. لا تحتاج إلى كتابة فواصل.</div>
+    </div>
+
+    <div style="font-weight:900; color:#0f172a; margin-bottom:8px;">🐥 أعداد القطيع حسب الدور</div>
+    <div class="table-wrapper" style="overflow-x:auto; margin-bottom:12px;">
+      <table class="dashboard-table" style="width:100%; min-width:720px; font-size:.82rem;">
+        <thead><tr><th>الدور</th><th>العدد الابتدائي</th><th>النافق المسجل</th><th>العدد الحي الحالي</th><th>نافق جديد (اختياري)</th></tr></thead>
+        <tbody id="cycleEditFloorsBody"></tbody>
+      </table>
+    </div>
+    <div id="cycleEditTotals" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:11px; padding:10px 13px; color:#166534; font-weight:900; margin-bottom:15px;"></div>
+
+    <div style="border:1px solid #fecaca; background:#fff7f7; border-radius:13px; padding:13px; margin-bottom:15px;">
+      <div style="font-weight:900; color:#991b1b; margin-bottom:9px;">🐔 تسجيل نافق جديد مع الحفظ (اختياري)</div>
+      <div style="display:grid; grid-template-columns:180px 1fr; gap:10px;">
+        <label style="font-size:.78rem; font-weight:800; color:#7f1d1d;">تاريخ النافق
+          <input type="date" id="cycleEditMortalityDate" style="width:100%; margin-top:5px; padding:9px; border:1px solid #fecaca; border-radius:9px; font-weight:700;">
+        </label>
+        <label style="font-size:.78rem; font-weight:800; color:#7f1d1d;">ملاحظات
+          <input type="text" id="cycleEditMortalityNotes" placeholder="اختياري" style="width:100%; margin-top:5px; padding:9px; border:1px solid #fecaca; border-radius:9px; font-weight:700;">
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button id="cycleEditSaveBtn" onclick="cycleEditSave()" style="flex:1; background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; border:none; border-radius:11px; padding:12px; font-weight:900; cursor:pointer;">💾 حفظ تعديل الدورة</button>
+      <button onclick="cycleEditClose()" style="flex:1; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:11px; padding:12px; font-weight:900; cursor:pointer;">إلغاء</button>
     </div>
   </div>
 </div>
@@ -7927,6 +8007,73 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
             const totalCartons = Math.max(1, whiteQty + red);
             const avgPrice = net / totalCartons;
 
+            // الرصيد الكلي هو الحكم. لو تفصيل الأبيض/الأحمر في جدول العنابر قديم،
+            // نأخذ التفصيل الصحيح من آخر تقرير بشرط أن يكون إجماليه مطابقاً للإجمالي الحالي،
+            // ثم نزامن خانتي النوع قبل تنفيذ دالة البيع الأصلية.
+            let stockBefore = null;
+            if (!d.dbId || typeof sbClient === 'undefined' || !sbClient || typeof FARMITY_ADMIN_TABLES === 'undefined') {
+                alert('تعذر ربط الطلبية بسجل الداتابيز؛ لم يتم تأكيد البيع أو تسجيل إيراد.');
+                return;
+            }
+            try {
+                const stockRes = await sbClient.from(FARMITY_ADMIN_TABLES.sheds)
+                    .select('egg_stock,egg_stock_white,egg_stock_red')
+                    .eq('id', Number(d.barnId))
+                    .single();
+                if (stockRes.error) throw stockRes.error;
+                stockBefore = stockRes.data;
+                let availableTotal = farmtyAdminNum(stockBefore.egg_stock);
+                let availableWhite = farmtyAdminNum(stockBefore.egg_stock_white);
+                let availableRed = farmtyAdminNum(stockBefore.egg_stock_red);
+
+                if ((whiteQty + red) > availableTotal) {
+                    alert(`لا يمكن الموافقة: رصيد ${d.barn} هو ${availableTotal} طبق والمطلوب ${whiteQty + red} طبق.`);
+                    return;
+                }
+
+                // معالجة توافق البيانات القديمة تلقائياً بدل إيقاف البيع رغم صحة الإجمالي.
+                if (Math.abs(availableTotal - availableWhite - availableRed) > 0.000001) {
+                    const reportRes = await sbClient.from(FARMITY_ADMIN_TABLES.reports)
+                        .select('egg_stock,egg_stock_white,egg_stock_red,report_date')
+                        .eq('shed_id', Number(d.barnId))
+                        .order('report_date', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (reportRes.error) throw reportRes.error;
+                    const reportTotal = farmtyAdminNum(reportRes.data?.egg_stock);
+                    const reportWhite = farmtyAdminNum(reportRes.data?.egg_stock_white);
+                    const reportRed = farmtyAdminNum(reportRes.data?.egg_stock_red);
+                    const reportIsCurrent = reportRes.data &&
+                        Math.abs(reportTotal - availableTotal) <= 0.000001 &&
+                        Math.abs(reportTotal - reportWhite - reportRed) <= 0.000001;
+                    if (!reportIsCurrent) {
+                        alert(`تعذر تحديد تفصيل رصيد ${d.barn} من التقرير الحالي؛ لم يتم تسجيل البيع.`);
+                        return;
+                    }
+
+                    const splitSync = await sbClient.from(FARMITY_ADMIN_TABLES.sheds)
+                        .update({ egg_stock_white: reportWhite, egg_stock_red: reportRed })
+                        .eq('id', Number(d.barnId))
+                        .eq('egg_stock', availableTotal)
+                        .select('egg_stock,egg_stock_white,egg_stock_red')
+                        .single();
+                    if (splitSync.error) throw splitSync.error;
+                    stockBefore = splitSync.data;
+                    availableTotal = farmtyAdminNum(stockBefore.egg_stock);
+                    availableWhite = farmtyAdminNum(stockBefore.egg_stock_white);
+                    availableRed = farmtyAdminNum(stockBefore.egg_stock_red);
+                }
+
+                if (whiteQty > availableWhite || red > availableRed) {
+                    alert(`لا يمكن الموافقة: المتاح في ${d.barn} أبيض ${availableWhite} / أحمر ${availableRed}، والطلب أبيض ${whiteQty} / أحمر ${red}.`);
+                    return;
+                }
+            } catch (stockError) {
+                console.error('sale stock check error:', stockError);
+                alert('تعذر قراءة وتجهيز رصيد العنبر؛ لم يتم تأكيد البيع أو تسجيل الإيراد.');
+                return;
+            }
+
             // 1) المزامنة مع Supabase: دالة mazraaty_confirm_sale هي المصدر الوحيد للحقيقة —
             // هي اللي بتخصم رصيد البيض (أبيض من الأبيض/أحمر من الأحمر) وتضيف الدين على التاجر
             // وتحسب الإجمالي — كله في معاملة واحدة ذرّية.
@@ -7955,6 +8102,28 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                     console.error('confirm_sale RPC فشلت:', rpcMsg);
                     if (typeof showMiniToast === 'function') showMiniToast('تعذر تأكيد الطلبية (لم يتم خصم الرصيد) — حاول تاني', 'red');
                     else alert('تعذر تأكيد الطلبية — لم يتم أي خصم أو تعديل. حاول مرة تانية.');
+                    return;
+                }
+
+                // تأكيد قراءة بعد العملية: الكلي والأبيض والأحمر يجب أن ينقصوا بالضبط.
+                try {
+                    const afterRes = await sbClient.from(FARMITY_ADMIN_TABLES.sheds)
+                        .select('egg_stock,egg_stock_white,egg_stock_red')
+                        .eq('id', Number(d.barnId))
+                        .single();
+                    if (afterRes.error) throw afterRes.error;
+                    const expectedTotal = farmtyAdminNum(stockBefore.egg_stock) - whiteQty - red;
+                    const expectedWhite = farmtyAdminNum(stockBefore.egg_stock_white) - whiteQty;
+                    const expectedRed = farmtyAdminNum(stockBefore.egg_stock_red) - red;
+                    if (farmtyAdminNum(afterRes.data.egg_stock) !== expectedTotal ||
+                        farmtyAdminNum(afterRes.data.egg_stock_white) !== expectedWhite ||
+                        farmtyAdminNum(afterRes.data.egg_stock_red) !== expectedRed) {
+                        throw new Error('لم يتطابق رصيد العنبر بعد تنفيذ الموافقة');
+                    }
+                } catch (verifyError) {
+                    console.error('sale deduction verification error:', verifyError);
+                    try { if (typeof loadAdminSharedData === 'function') await loadAdminSharedData(); } catch (e) {}
+                    alert('تنبيه: لم ينجح التحقق من خصم الرصيد. لا تنفذ بيعًا جديدًا قبل مراجعة العملية.');
                     return;
                 }
 
@@ -10716,7 +10885,9 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                 // رصيد البيض والكرتون: يُقرآن من تقرير المشرف المحفوظ (محسوب تلقائياً بنفس معادلة صفحة المشرفين)
                 // ملاحظة: رصيد البيض في التقرير يشمل إنتاج اليوم، ورصيد الكرتون يشمل استهلاك 89 طبق = لفة
                 const todayProduction = eggWhite + eggRed;
-                const eggStock = report ? (parseFloat(report.totalEggStock) || 0) : ((shed.eggStock !== undefined) ? shed.eggStock : 0);
+                const eggStock = (shed.eggStock !== undefined)
+                    ? farmtyAdminNum(shed.eggStock)
+                    : (report ? (parseFloat(report.totalEggStock) || 0) : 0);
                 // رصيد الأبيض والأحمر المنفصل (من أعمدة القاعدة egg_stock_white / egg_stock_red)
                 // ⚠️ رصيد الأبيض/الأحمر من الرصيد الدائم في جدول العنابر (مبيتصفرش مع اليوم الجديد)
                 // — مش مربوط بإنتاج اليوم اللي بيتصفر مع كل يوم جديد
@@ -11946,6 +12117,10 @@ function applyShedsToRuntime() {
       ownerShed.birds = farmtyAdminNum(row.birds);
       ownerShed.dailyQuota = farmtyAdminNum(row.daily_quota);
       ownerShed.supplier = row.supplier || ownerShed.supplier;
+      // رصيد البيض الحالي الرسمي: من جدول العنابر الذي تخصم منه موافقة البيع.
+      ownerShed.eggStock = farmtyAdminNum(row.egg_stock);
+      ownerShed.eggStockWhite = farmtyAdminNum(row.egg_stock_white);
+      ownerShed.eggStockRed = farmtyAdminNum(row.egg_stock_red);
       // العمر الفعلي: المسجل + الأيام من تاريخ التسجيل (زيادة يومية تلقائية)
       ownerShed.age = ownerEffectiveAge(shedId, farmtyAdminNum(row.age_days), row.age_reference_date);
       ownerShed.eggRate = `${farmtyAdminNum(row.egg_rate)}%`;
@@ -12035,17 +12210,19 @@ function applyReportsToRuntime() {
     barn.med = row.incoming_meds || '';
     barn.medInvoice = row.incoming_meds || '';
     barn.medQty = row.incoming_meds ? 1 : 0;
-    // رصيد الأبيض والأحمر المنفصل (أعمدة موجودة في القاعدة — المشرف يحددهم اختيارياً)
-    // ⚠️ رصيد الأبيض/الأحمر مصدره الرصيد الدائم في جدول العنابر (اتقرا في applyShedsToRuntime)
-    // — مش من تقرير اليوم ولا من إنتاج اليوم اللي بيتصفر مع كل يوم جديد.
-    // هنا بنسجل بس القيم اللي التقرير بيؤكدها لو كانت موجودة فعلاً (تفصيل حقيقي > 0)
-    const repWhite = farmtyAdminNum(row.egg_stock_white);
-    const repRed = farmtyAdminNum(row.egg_stock_red);
-    if ((repWhite + repRed) > 0) {
-      barn.eggWhite = repWhite;
-      barn.eggRed = repRed;
-      barn.eggStockWhite = repWhite;
-      barn.eggStockRed = repRed;
+    // استخدام تفصيل التقرير للعرض فقط عندما يطابق إجمالي الرصيد الحي.
+    // بعد أي بيع يصبح إجمالي العنبر أقل من التقرير، فلا يستطيع التقرير إعادة الرصيد القديم.
+    const currentSplit = farmtyAdminNum(barn.eggWhite) + farmtyAdminNum(barn.eggRed);
+    const reportTotal = farmtyAdminNum(row.egg_stock);
+    const reportWhite = farmtyAdminNum(row.egg_stock_white);
+    const reportRed = farmtyAdminNum(row.egg_stock_red);
+    if (Math.abs(farmtyAdminNum(barn.eggStock) - currentSplit) > 0.000001 &&
+        Math.abs(reportTotal - farmtyAdminNum(barn.eggStock)) <= 0.000001 &&
+        Math.abs(reportTotal - reportWhite - reportRed) <= 0.000001) {
+      barn.eggWhite = reportWhite;
+      barn.eggRed = reportRed;
+      barn.eggStockWhite = reportWhite;
+      barn.eggStockRed = reportRed;
     }
     // الحصة اليومية من جدول العنابر (الرصيد ÷ الحصة = يكفي قد إيه)
     const shedRowQ = farmtyAdminState.sheds.get(Number(shedId));
@@ -13155,9 +13332,15 @@ async function cyclesStartSubmit() {
 
 // ===== إنهاء وتصفية =====
 async function cyclesOpenCloseModal(cycleId) {
-    const c = cyclesState.list.find(x => Number(x.id) === Number(cycleId));
+    const c = cyclesState.list.find(x => Number(x.id) === Number(cycleId))
+        || (shedsState.allCycles || []).find(x => Number(x.id) === Number(cycleId));
     if (!c) return;
     cyclesState.currentCloseId = Number(cycleId);
+    cyclesState.currentCloseRemaining = Math.max(0, farmtyAdminNum(c.initial_count) - farmtyAdminNum(c.total_dead));
+    document.getElementById('cyclesCloseFinal').value = cyclesState.currentCloseRemaining;
+    document.getElementById('cyclesClosePrice').value = '';
+    document.getElementById('cyclesCloseReason').value = '';
+    cyclesCloseUpdatePreview();
     const info = document.getElementById('cyclesCloseInfo');
     if (info) {
         const days = cyclesAgeDays(c.placement_date);
@@ -13171,20 +13354,28 @@ async function cyclesOpenCloseModal(cycleId) {
             const { data } = await sbClient.rpc('mazraaty_cycle_live_summary', { p_cycle_id: Number(cycleId) });
             if (data && data.ok) {
                 liveEl.innerHTML = `📊 حتى اليوم: إنتاج <strong>${Number(data.eggs).toLocaleString('ar-EG')}</strong> طبق بيض — علف <strong>${Number(data.feed_used).toLocaleString('ar-EG')}</strong> شيكارة — نافق <strong>${Number(data.dead).toLocaleString('ar-EG')}</strong> — أدوية <strong>${Number(data.meds).toLocaleString('ar-EG')} ج.م</strong> — إيراد <strong>${Number(data.income).toLocaleString('ar-EG')} ج.م</strong>`;
+                if (Number.isFinite(Number(data.remaining))) {
+                    cyclesState.currentCloseRemaining = Math.max(0, Number(data.remaining));
+                    document.getElementById('cyclesCloseFinal').value = cyclesState.currentCloseRemaining;
+                    cyclesCloseUpdatePreview();
+                }
             } else {
                 liveEl.innerHTML = 'لا توجد بيانات تقارير للدورة بعد.';
             }
         } catch (e) { liveEl.innerHTML = 'تعذر جلب الملخص.'; }
     }
-    document.getElementById('cyclesCloseFinal').value = farmtyAdminNum(c.initial_count);
-    document.getElementById('cyclesClosePrice').value = '';
-    document.getElementById('cyclesCloseReason').value = '';
     const modal = document.getElementById('cyclesCloseModal');
     if (modal) modal.style.display = 'flex';
 }
 function cyclesCloseCloseModal() {
     const modal = document.getElementById('cyclesCloseModal');
     if (modal) modal.style.display = 'none';
+}
+function cyclesCloseUpdatePreview() {
+    const count = Math.max(0, Number(document.getElementById('cyclesCloseFinal')?.value || 0));
+    const price = Math.max(0, Number(document.getElementById('cyclesClosePrice')?.value || 0));
+    const preview = document.getElementById('cyclesCloseSalePreview');
+    if (preview) preview.textContent = 'إيراد بيع الفراخ: ' + (count * price).toLocaleString('ar-EG') + ' ج.م';
 }
 async function cyclesCloseSubmit() {
     if (!cyclesState.currentCloseId) return;
@@ -13193,6 +13384,9 @@ async function cyclesCloseSubmit() {
     const reason = (document.getElementById('cyclesCloseReason')?.value || '').trim();
 
     if (finalCount <= 0) { showMiniToast('اكتب العدد الحالي عند البيع (أكبر من صفر)', 'red'); return; }
+    if (Number.isFinite(Number(cyclesState.currentCloseRemaining)) && finalCount > Number(cyclesState.currentCloseRemaining)) {
+        showMiniToast('عدد البيع أكبر من العدد الحي الحالي للدورة', 'red'); return;
+    }
     if (price <= 0) { showMiniToast('اكتب سعر بيع الفرخة (أكبر من صفر)', 'red'); return; }
     if (!confirm('⚠️ هل أنت متأكد من إنهاء وتصفية هذه الدورة؟\n\nسيتم حساب صافي الربح/الخسارة نهائياً، وتحويل العنبر إلى فارغ/متاح للتسكين. لا يمكن التراجع.')) return;
 
@@ -13836,8 +14030,8 @@ async function shedSave() {
 
 // ⚠️ قايمة الموردين في فورمة الدورة: الإيمان + المجد + الموردين المخصصين
 // (من غير المخفيين) — أي مورد جديد من الرئيسية يظهر هنا تلقائياً
-function farmtyFillCycleSupplierSelect(selectedName) {
-    const sel = document.getElementById('shedCycleSupplier');
+function farmtyFillCycleSupplierSelect(selectedName, selectId = 'shedCycleSupplier') {
+    const sel = document.getElementById(selectId);
     if (!sel) return;
     const hidden = (typeof ownerGetHiddenFeedSuppliers === 'function') ? ownerGetHiddenFeedSuppliers() : [];
     const options = [];
@@ -13855,6 +14049,36 @@ function farmtyFillCycleSupplierSelect(selectedName) {
     sel.innerHTML = html;
 }
 
+// اختيار المشرفين للدورة الجديدة بدون كتابة فواصل
+let shedCycleSelectedSupervisors = [];
+function shedCycleRenderSupervisors() {
+    const box = document.getElementById('shedCycleSelectedSupervisors');
+    if (box) {
+        box.innerHTML = shedCycleSelectedSupervisors.length
+            ? shedCycleSelectedSupervisors.map((name, i) => `<span style="display:inline-flex; align-items:center; gap:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:99px; padding:5px 10px; font-weight:900; font-size:.78rem;">${mzEscape(name)} <button type="button" onclick="shedCycleRemoveSupervisor(${i})" style="background:transparent; border:none; color:#dc2626; cursor:pointer; font-weight:900; padding:0;">×</button></span>`).join('')
+            : '<span style="color:#dc2626; font-size:.78rem; font-weight:800;">اختر مشرفًا واحدًا على الأقل</span>';
+    }
+    const sel = document.getElementById('shedCycleSupervisorSelect');
+    if (sel) {
+        const candidates = cycleAllSupervisorCandidates(shedCycleSelectedSupervisors).filter(n => !shedCycleSelectedSupervisors.includes(n));
+        sel.innerHTML = '<option value="">-- اختر مشرفًا --</option>' + candidates.map(n => `<option value="${mzEscape(n)}">${mzEscape(n)}</option>`).join('');
+    }
+}
+function shedCycleAddSupervisor(manual) {
+    const source = manual ? document.getElementById('shedCycleSupervisorManual') : document.getElementById('shedCycleSupervisorSelect');
+    const raw = (source?.value || '').trim();
+    if (!raw) { showMiniToast('اختر أو اكتب اسم المشرف أولاً', 'yellow'); return; }
+    cycleSupervisorNamesFromText(raw).forEach(name => {
+        if (!shedCycleSelectedSupervisors.includes(name)) shedCycleSelectedSupervisors.push(name);
+    });
+    if (source) source.value = '';
+    shedCycleRenderSupervisors();
+}
+function shedCycleRemoveSupervisor(index) {
+    shedCycleSelectedSupervisors.splice(Number(index), 1);
+    shedCycleRenderSupervisors();
+}
+
 // ===== مودال دورة جديدة (توزيع أدوار) =====
 function shedOpenCycleModal() {
     const s = shedsState.currentShed;
@@ -13865,7 +14089,9 @@ function shedOpenCycleModal() {
     // ⚠️ المورد = قايمة اختيار (مش كتابة) — من موردين النظام الحاليين
     farmtyFillCycleSupplierSelect(s.supplier || '');
     document.getElementById('shedCyclePrice').value = '';
-    document.getElementById('shedCycleSup').value = Array.isArray(s.supervisors) ? s.supervisors.join('، ') : '';
+    shedCycleSelectedSupervisors = Array.isArray(s.supervisors) ? [...s.supervisors] : [];
+    document.getElementById('shedCycleSupervisorManual').value = '';
+    shedCycleRenderSupervisors();
     document.getElementById('shedCycleError').style.display = 'none';
     const floorCount = farmtyAdminNum(s.num_floors) || 1;
     document.getElementById('shedCycleFloorCount').textContent = floorCount;
@@ -13902,10 +14128,11 @@ async function shedCycleCreate() {
     const breed = (document.getElementById('shedCycleBreed')?.value || '').trim();
     const supplier = (document.getElementById('shedCycleSupplier')?.value || '').trim();
     const price = parseFloat(document.getElementById('shedCyclePrice')?.value) || 0;
-    const sup = (document.getElementById('shedCycleSup')?.value || '').trim();
+    const sup = shedCycleSelectedSupervisors.join('، ');
     const errEl = document.getElementById('shedCycleError');
     if (!date) { errEl.textContent = 'اكتب تاريخ بداية الدورة.'; errEl.style.display = 'block'; return; }
     if (!supplier) { errEl.textContent = 'اختر المورد المعتمد من القائمة أولاً (علشان تكلفة العلف تتحسب صح).'; errEl.style.display = 'block'; return; }
+    if (!shedCycleSelectedSupervisors.length) { errEl.textContent = 'اختر مشرفًا واحدًا على الأقل.'; errEl.style.display = 'block'; return; }
     const floorCount = farmtyAdminNum(s.num_floors) || 1;
     const floors = [];
     let hasAny = false;
@@ -13943,6 +14170,222 @@ async function shedCycleCreate() {
     }
 }
 
+// ===== تعديل الدورة الحالية بالكامل =====
+let cycleEditState = { cycle: null, floors: [], supervisors: [] };
+
+function cycleSupervisorNamesFromText(value) {
+    return String(value || '').split(/[،,]/).map(x => x.trim()).filter(Boolean);
+}
+function cycleAllSupervisorCandidates(extra) {
+    const names = new Set(extra || []);
+    (shedsState.all || []).forEach(s => (Array.isArray(s.supervisors) ? s.supervisors : []).forEach(n => { if (n) names.add(String(n).trim()); }));
+    try {
+        ((farmtyAdminState && farmtyAdminState.users) || [])
+            .filter(u => String(u.role || '') === 'مشرف' && u.is_active !== false)
+            .forEach(u => { if (u.name) names.add(String(u.name).trim()); });
+    } catch (e) { /* تجاهل */ }
+    return Array.from(names).filter(Boolean).sort((a,b) => a.localeCompare(b, 'ar'));
+}
+function cycleEditRenderSupervisors() {
+    const box = document.getElementById('cycleEditSelectedSupervisors');
+    if (box) {
+        box.innerHTML = cycleEditState.supervisors.length
+            ? cycleEditState.supervisors.map((name, i) => `<span style="display:inline-flex; align-items:center; gap:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:99px; padding:5px 10px; font-weight:900; font-size:.78rem;">${mzEscape(name)} <button type="button" onclick="cycleEditRemoveSupervisor(${i})" style="background:transparent; border:none; color:#dc2626; cursor:pointer; font-weight:900; padding:0;">×</button></span>`).join('')
+            : '<span style="color:#dc2626; font-size:.78rem; font-weight:800;">اختر مشرفًا واحدًا على الأقل</span>';
+    }
+    const sel = document.getElementById('cycleEditSupervisorSelect');
+    if (sel) {
+        const candidates = cycleAllSupervisorCandidates(cycleEditState.supervisors).filter(n => !cycleEditState.supervisors.includes(n));
+        sel.innerHTML = '<option value="">-- اختر مشرفًا --</option>' + candidates.map(n => `<option value="${mzEscape(n)}">${mzEscape(n)}</option>`).join('');
+    }
+}
+function cycleEditAddSupervisor(manual) {
+    const source = manual ? document.getElementById('cycleEditSupervisorManual') : document.getElementById('cycleEditSupervisorSelect');
+    const raw = (source?.value || '').trim();
+    if (!raw) { showMiniToast('اختر أو اكتب اسم المشرف أولاً', 'yellow'); return; }
+    cycleSupervisorNamesFromText(raw).forEach(name => {
+        if (!cycleEditState.supervisors.includes(name)) cycleEditState.supervisors.push(name);
+    });
+    if (source) source.value = '';
+    cycleEditRenderSupervisors();
+}
+function cycleEditRemoveSupervisor(index) {
+    cycleEditState.supervisors.splice(Number(index), 1);
+    cycleEditRenderSupervisors();
+}
+function cycleEditClose() {
+    const modal = document.getElementById('cycleEditModal');
+    if (modal) modal.style.display = 'none';
+}
+async function cycleEditOpen() {
+    const cycleId = Number(shedsState.currentCycle || 0);
+    if (!cycleId || typeof sbClient === 'undefined' || !sbClient) return;
+    const err = document.getElementById('cycleEditError');
+    err.style.display = 'none';
+    try {
+        const [cycleRes, floorsRes] = await Promise.all([
+            sbClient.from('mazraaty_cycles').select('*').eq('id', cycleId).single(),
+            sbClient.from('mazraaty_cycle_floors').select('*').eq('cycle_id', cycleId).order('floor_no')
+        ]);
+        if (cycleRes.error) throw cycleRes.error;
+        if (floorsRes.error) throw floorsRes.error;
+        const cycle = cycleRes.data;
+        if (!cycle || cycle.status !== 'active') throw new Error('لا يمكن تعديل دورة منتهية');
+        cycleEditState.cycle = cycle;
+        cycleEditState.floors = (floorsRes.data || []).map(f => ({
+            floor: Number(f.floor_no),
+            initial: Number(f.initial_count || 0),
+            dead: Number(f.dead_count || 0),
+            current: Math.max(0, Number(f.initial_count || 0) - Number(f.dead_count || 0))
+        }));
+        const shed = shedsState.all.find(s => Number(s.id) === Number(cycle.shed_id));
+        const fromCycle = cycleSupervisorNamesFromText(cycle.supervisor);
+        cycleEditState.supervisors = fromCycle.length ? fromCycle : (Array.isArray(shed?.supervisors) ? [...shed.supervisors] : []);
+
+        document.getElementById('cycleEditTitle').textContent = `${shed?.name || ('عنبر ' + cycle.shed_id)} — الدورة ${cycle.cycle_no}`;
+        document.getElementById('cycleEditDate').value = String(cycle.placement_date || '').slice(0,10);
+        document.getElementById('cycleEditBreed').value = cycle.breed || '';
+        farmtyFillCycleSupplierSelect(cycle.supplier || shed?.supplier || '', 'cycleEditSupplier');
+        document.getElementById('cycleEditChickPrice').value = Number(cycle.chick_price || 0);
+        document.getElementById('cycleEditAvgWeight').value = Number(cycle.avg_weight || 0);
+        document.getElementById('cycleEditMortalityDate').value = new Date().toISOString().slice(0,10);
+        document.getElementById('cycleEditMortalityNotes').value = '';
+        cycleEditRenderSupervisors();
+        cycleEditRenderFloors();
+        document.getElementById('cycleEditModal').style.display = 'flex';
+    } catch (e) {
+        console.error('cycleEditOpen error:', e);
+        showMiniToast('تعذر فتح تعديل الدورة: ' + (e.message || e), 'red');
+    }
+}
+function cycleEditRenderFloors() {
+    const body = document.getElementById('cycleEditFloorsBody');
+    if (!body) return;
+    body.innerHTML = cycleEditState.floors.map((f, i) => `<tr style="border-top:1px solid #f1f5f9;">
+        <td style="font-weight:900;">الدور ${f.floor}</td>
+        <td><input type="number" id="cycleEditInitial-${i}" min="${f.dead}" step="1" value="${f.initial}" oninput="cycleEditFloorChanged(${i},'initial')" style="width:120px; padding:8px; border:1px solid #cbd5e1; border-radius:8px; font-weight:800;"></td>
+        <td style="color:#dc2626; font-weight:900;">${f.dead.toLocaleString('ar-EG')}</td>
+        <td><input type="number" id="cycleEditCurrent-${i}" min="0" step="1" value="${f.current}" oninput="cycleEditFloorChanged(${i},'current')" style="width:120px; padding:8px; border:1px solid #86efac; border-radius:8px; font-weight:900; color:#15803d;"></td>
+        <td><input type="number" id="cycleEditNewDead-${i}" min="0" step="1" value="0" oninput="cycleEditRecalculate()" style="width:110px; padding:8px; border:1px solid #fecaca; border-radius:8px; font-weight:900; color:#b91c1c;"></td>
+    </tr>`).join('');
+    cycleEditRecalculate();
+}
+function cycleEditFloorChanged(index, source) {
+    const f = cycleEditState.floors[Number(index)];
+    if (!f) return;
+    const initialEl = document.getElementById('cycleEditInitial-' + index);
+    const currentEl = document.getElementById('cycleEditCurrent-' + index);
+    if (source === 'initial') {
+        let initial = Math.max(f.dead, Math.trunc(Number(initialEl.value || 0)));
+        initialEl.value = initial;
+        currentEl.value = Math.max(0, initial - f.dead);
+    } else {
+        let current = Math.max(0, Math.trunc(Number(currentEl.value || 0)));
+        currentEl.value = current;
+        initialEl.value = current + f.dead;
+    }
+    cycleEditRecalculate();
+}
+function cycleEditRecalculate() {
+    let totalInitial = 0, totalCurrent = 0, newDead = 0;
+    cycleEditState.floors.forEach((f, i) => {
+        totalInitial += Math.max(0, Math.trunc(Number(document.getElementById('cycleEditInitial-' + i)?.value || 0)));
+        totalCurrent += Math.max(0, Math.trunc(Number(document.getElementById('cycleEditCurrent-' + i)?.value || 0)));
+        newDead += Math.max(0, Math.trunc(Number(document.getElementById('cycleEditNewDead-' + i)?.value || 0)));
+    });
+    const price = Math.max(0, Number(document.getElementById('cycleEditChickPrice')?.value || 0));
+    const finalCurrent = Math.max(0, totalCurrent - newDead);
+    const box = document.getElementById('cycleEditTotals');
+    if (box) box.innerHTML = `الابتدائي: ${totalInitial.toLocaleString('ar-EG')} — الحي قبل النافق الجديد: ${totalCurrent.toLocaleString('ar-EG')} — نافق جديد: ${newDead.toLocaleString('ar-EG')} — الحي بعد الحفظ: ${finalCurrent.toLocaleString('ar-EG')} — تكلفة الكتاكيت: ${(totalInitial * price).toLocaleString('ar-EG')} ج.م`;
+}
+async function cycleEditSave() {
+    const cycle = cycleEditState.cycle;
+    if (!cycle) return;
+    const err = document.getElementById('cycleEditError');
+    err.style.display = 'none';
+    const date = document.getElementById('cycleEditDate')?.value || '';
+    const breed = (document.getElementById('cycleEditBreed')?.value || '').trim();
+    const supplier = (document.getElementById('cycleEditSupplier')?.value || '').trim();
+    const chickPrice = Number(document.getElementById('cycleEditChickPrice')?.value || 0);
+    const avgWeight = Number(document.getElementById('cycleEditAvgWeight')?.value || 0);
+    if (!date) { err.textContent = 'اكتب تاريخ بداية الدورة.'; err.style.display = 'block'; return; }
+    if (!supplier) { err.textContent = 'اختر المورد المعتمد.'; err.style.display = 'block'; return; }
+    if (chickPrice < 0 || avgWeight < 0) { err.textContent = 'السعر والوزن لا يمكن أن يكونا سالبين.'; err.style.display = 'block'; return; }
+    if (!cycleEditState.supervisors.length) { err.textContent = 'اختر مشرفًا واحدًا على الأقل.'; err.style.display = 'block'; return; }
+
+    const floors = [];
+    const mortality = [];
+    for (let i = 0; i < cycleEditState.floors.length; i++) {
+        const f = cycleEditState.floors[i];
+        const initial = Math.trunc(Number(document.getElementById('cycleEditInitial-' + i)?.value || 0));
+        const current = Math.trunc(Number(document.getElementById('cycleEditCurrent-' + i)?.value || 0));
+        const addDead = Math.trunc(Number(document.getElementById('cycleEditNewDead-' + i)?.value || 0));
+        if (initial < 0 || current < 0 || initial - current !== f.dead) {
+            err.textContent = `الدور ${f.floor}: الابتدائي يجب أن يساوي الحي + النافق المسجل (${f.dead}).`;
+            err.style.display = 'block'; return;
+        }
+        if (addDead < 0 || addDead > current) {
+            err.textContent = `الدور ${f.floor}: النافق الجديد أكبر من العدد الحي أو غير صحيح.`;
+            err.style.display = 'block'; return;
+        }
+        floors.push({ floor: f.floor, initial, current });
+        if (addDead > 0) mortality.push({ floor: f.floor, count: addDead });
+    }
+
+    const button = document.getElementById('cycleEditSaveBtn');
+    button.disabled = true;
+    const oldText = button.textContent;
+    button.textContent = 'جارِ الحفظ...';
+    try {
+        const oldValue = {
+            placement_date: cycle.placement_date, breed: cycle.breed, supplier: cycle.supplier,
+            chick_price: cycle.chick_price, avg_weight: cycle.avg_weight, supervisor: cycle.supervisor,
+            initial_count: cycle.initial_count
+        };
+        const { data, error } = await sbClient.rpc('mazraaty_update_cycle_full', {
+            p_cycle_id: Number(cycle.id),
+            p_placement_date: date,
+            p_breed: breed,
+            p_supplier: supplier,
+            p_chick_price: chickPrice,
+            p_avg_weight: avgWeight,
+            p_supervisors: cycleEditState.supervisors,
+            p_floors: floors,
+            p_mortality_date: document.getElementById('cycleEditMortalityDate')?.value || null,
+            p_mortality_floors: mortality,
+            p_mortality_notes: (document.getElementById('cycleEditMortalityNotes')?.value || '').trim(),
+            p_updated_by: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+        });
+        if (error) throw error;
+        try {
+            await sbClient.rpc('mazraaty_log_action', {
+                p_action_type: 'تعديل دورة', p_table_name: 'mazraaty_cycles', p_record_id: Number(cycle.id),
+                p_old_value: oldValue,
+                p_new_value: { placement_date:date, breed, supplier, chick_price:chickPrice, avg_weight:avgWeight, supervisors:cycleEditState.supervisors, floors, mortality },
+                p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+            });
+        } catch (auditError) { console.warn('cycle edit audit:', auditError); }
+        cycleEditClose();
+        showMiniToast(`✅ تم تعديل الدورة — الحي الحالي ${Number(data?.total_remaining || 0).toLocaleString('ar-EG')}${Number(data?.mortality_added || 0) > 0 ? ' — نافق جديد ' + Number(data.mortality_added).toLocaleString('ar-EG') : ''}`, 'green');
+        const shedId = Number(cycle.shed_id);
+        await shedsLoad();
+        shedsState.currentShed = shedsState.all.find(x => Number(x.id) === shedId) || null;
+        shedOpenDetails(shedId);
+        await cycleOpenFromShed(Number(cycle.id));
+        if (typeof loadAdminSharedData === 'function') loadAdminSharedData();
+    } catch (e) {
+        console.error('cycleEditSave error:', e);
+        const msg = (e.message || e).toString();
+        err.textContent = /mazraaty_update_cycle_full|schema cache|Could not find/i.test(msg)
+            ? 'شغّل ملف SQL الخاص بتعديل الدورة أولاً، ثم أعد المحاولة.'
+            : msg.replace(/^.*?ERROR:\s*/i, '');
+        err.style.display = 'block';
+    } finally {
+        button.disabled = false;
+        button.textContent = oldText;
+    }
+}
+
 // ===== لوحة تحكم الدورة =====
 async function cycleOpenFromShed(cycleId) {
     document.getElementById('cycleDashboardPanel').style.display = 'block';
@@ -13957,6 +14400,8 @@ async function cycleDashboardLoad(cycleId) {
         if (error) throw error;
         if (!data || !data.ok) return;
         shedsState.currentCycleData = data;
+        const cycleRow = (shedsState.allCycles || []).find(c => Number(c.id) === Number(cycleId));
+        shedsCurrentCycleWeight = farmtyAdminNum(cycleRow?.avg_weight || 0);
         cycleDashboardRender(data);
     } catch (e) {
         console.error('cycleDashboardLoad error:', e);
@@ -13975,8 +14420,7 @@ function cycleDashboardRender(d) {
     const netEl = document.getElementById('cdNet');
     netEl.textContent = net.toLocaleString('ar-EG') + ' ج.م';
     netEl.style.color = net >= 0 ? '#16a34a' : '#dc2626';
-    // الوزن
-    const cycle = shedsState.all.length ? null : null;
+    // الوزن الحالي من سجل الدورة
     document.getElementById('cdWeight').textContent = farmtyAdminNum(shedsCurrentCycleWeight || 0).toLocaleString('ar-EG');
     document.getElementById('cdFeed').textContent = Number(d.feed_used).toLocaleString('ar-EG') + ' شيكارة';
 
@@ -16721,5 +17165,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f5b66f0aebef9a',t:'MTc4NzQ0MTkyMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين</title>
+    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين — Egg Deduction Fix 2</title>
     <!-- Font Awesome & Google Fonts -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -3120,11 +3120,11 @@ function computeStockDisplays() {
     let baseEggWhite, baseEggRed;
 
     if (rep) {
-        // تقرير اليوم موجود: نرجع لرصيد بداية اليوم بطرح حركات التقرير المحفوظ
-        baseEgg = farmtyNum(rep.egg_stock) - farmtyNum(rep.egg_white) - farmtyNum(rep.egg_red);
-        // رصيد الأبيض/الأحمر في بداية اليوم = الرصيد المرسل في التقرير − إنتاج اليوم من كل نوع
-        baseEggWhite = farmtyNum(rep.egg_stock_white) - farmtyNum(rep.egg_white);
-        baseEggRed = farmtyNum(rep.egg_stock_red) - farmtyNum(rep.egg_red);
+        // عند تعديل التقرير نبدأ من الرصيد الحي الحالي ونطبق فرق الإنتاج فقط؛
+        // بذلك لا يعيد التقرير رصيد ما قبل البيع بعد أن يخصمه المالك.
+        baseEgg = farmtyNum(shed.eggStock) - farmtyNum(rep.egg_white) - farmtyNum(rep.egg_red);
+        baseEggWhite = farmtyNum(shed.eggWhite) - farmtyNum(rep.egg_white);
+        baseEggRed = farmtyNum(shed.eggRed) - farmtyNum(rep.egg_red);
         baseFeed = farmtyNum(rep.feed_stock) - farmtyNum(rep.incoming_feed) + farmtyNum(rep.feed_used) + farmtyNum(rep.feed_withdrawn_qty);
         // نرجع كمان لفات الكرتون المستهلكة من إنتاج التقرير المحفوظ (89 طبق = لفة، نسبة دقيقة)
         const savedConsumed = (farmtyNum(rep.egg_white) + farmtyNum(rep.egg_red)) / CARTON_TRAYS_PER_ROLL;
@@ -3883,6 +3883,8 @@ saveTodayReportData = async function(shedId, dateKey = getTodayKey()) {
             } else {
                 shed.feedSacks = farmtyNum(payload.feed_stock);
                 shed.eggStock = farmtyNum(payload.egg_stock);
+                shed.eggWhite = farmtyNum(payload.egg_stock_white);
+                shed.eggRed = farmtyNum(payload.egg_stock_red);
                 shed.cartonStock = farmtyNum(payload.carton_stock);
             }
         }
@@ -4118,6 +4120,8 @@ async function handleBlock1Submit(event) {
                     await sbClient.from(FARMITY_TABLES.sheds)
                         .update({
                             egg_stock: farmtyNum(syncedRep.egg_stock),
+                            egg_stock_white: farmtyNum(syncedRep.egg_stock_white),
+                            egg_stock_red: farmtyNum(syncedRep.egg_stock_red),
                             feed_stock: farmtyNum(syncedRep.feed_stock),
                             carton_stock: farmtyNum(syncedRep.carton_stock),
                             empty_sacks_stock: farmtyNum(syncedRep.empty_sacks_stock)
@@ -4217,7 +4221,19 @@ function mergeShedsFromSupabase(rows) {
         const shed = shedList.find(item => Number(item.id) === Number(shedId));
         if (!shed) return;
         shed.feedSacks = farmtyNum(report.feed_stock);
-        shed.eggStock = farmtyNum(report.egg_stock);
+        // لو تفصيل النوع في جدول العنابر قديم والتقرير يطابق نفس الإجمالي الحالي،
+        // نستخدم تفصيل التقرير للعرض. بعد البيع يختلف الإجمالي فلا يرجع الرصيد القديم.
+        const liveTotal = farmtyNum(shed.eggStock);
+        const liveSplit = farmtyNum(shed.eggWhite) + farmtyNum(shed.eggRed);
+        const repTotal = farmtyNum(report.egg_stock);
+        const repWhite = farmtyNum(report.egg_stock_white);
+        const repRed = farmtyNum(report.egg_stock_red);
+        if (Math.abs(liveTotal - liveSplit) > 0.000001 &&
+            Math.abs(repTotal - liveTotal) <= 0.000001 &&
+            Math.abs(repTotal - repWhite - repRed) <= 0.000001) {
+            shed.eggWhite = repWhite;
+            shed.eggRed = repRed;
+        }
         shed.cartonStock = farmtyNum(report.carton_stock);
     });
 }
@@ -4320,7 +4336,17 @@ function subscribeSupervisorRealtime() {
                     const shed = shedList.find(item => Number(item.id) === shedId);
                     if (shed) {
                         shed.feedSacks = farmtyNum(row.feed_stock);
-                        shed.eggStock = farmtyNum(row.egg_stock);
+                        // نفس قاعدة العرض الآمنة: التقرير يُستخدم فقط لو إجماليه يساوي الرصيد الحي.
+                        const liveTotal = farmtyNum(shed.eggStock);
+                        const repTotal = farmtyNum(row.egg_stock);
+                        const repWhite = farmtyNum(row.egg_stock_white);
+                        const repRed = farmtyNum(row.egg_stock_red);
+                        if (Math.abs(liveTotal - farmtyNum(shed.eggWhite) - farmtyNum(shed.eggRed)) > 0.000001 &&
+                            Math.abs(repTotal - liveTotal) <= 0.000001 &&
+                            Math.abs(repTotal - repWhite - repRed) <= 0.000001) {
+                            shed.eggWhite = repWhite;
+                            shed.eggRed = repRed;
+                        }
                         shed.cartonStock = farmtyNum(row.carton_stock);
                     }
                 }
@@ -4481,10 +4507,12 @@ async function handleBlock2Submit(event) {
 
     // منع البيع بالسالب: لا يجوز سحب بيض أكثر من الرصيد المتاح في العنبر
     const availEggs = farmtyNum(activeShed.eggStock);
-    if (eggWhite + eggRed > availEggs) {
+    const availWhite = farmtyNum(activeShed.eggWhite);
+    const availRed = farmtyNum(activeShed.eggRed);
+    if (eggWhite + eggRed > availEggs || eggWhite > availWhite || eggRed > availRed) {
         document.getElementById('p2-egg-white').classList.add('input-error');
         document.getElementById('p2-egg-red').classList.add('input-error');
-        alert(`❌ لا يمكن تسجيل هذه الصفقة — الرصيد المتاح في ${activeShed.name} هو ${availEggs.toLocaleString('ar-EG')} طبق فقط، والمطلوب ${(eggWhite + eggRed).toLocaleString('ar-EG')} طبق.\nلا يجوز بيع بيض غير موجود في العنبر.`);
+        alert(`❌ لا يمكن تسجيل الصفقة — المتاح في ${activeShed.name}: أبيض ${availWhite.toLocaleString('ar-EG')} / أحمر ${availRed.toLocaleString('ar-EG')} (إجمالي ${availEggs.toLocaleString('ar-EG')}).`);
         return;
     }
 
@@ -4967,5 +4995,5 @@ checkPassword = async function() {
 };
 
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f58c416d330d4b',t:'MTc4NzQ0MDE5NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
