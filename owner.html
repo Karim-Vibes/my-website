@@ -140,7 +140,7 @@ body:not(.mz-ready) #splashScreen{visibility:visible}
   }catch(e){}
 })();
 </script>
-<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — Empty Sacks Full Sync 39</title>
+<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — Sebla Trips & Rejection 40</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 
@@ -5051,8 +5051,8 @@ window.MZ_SESSION = 'mz_session_v2';
         </div>
       </div>
       <p style="padding:0 4px 12px; font-size:0.8rem; color:var(--text-muted); line-height:1.7;">
-        المشرف يبعت طلب بيع سبلة باسم تاجر السبلة وكمية الشكاير — من غير قيمة. هنا تحدد سعر الشكارة/الطن وتؤكد،
-        فينزل إيراد للعنبر ودين على تاجر السبلة.
+        المشرف يبعت طلب بيع سبلة باسم تاجر السبلة وعدد النقلات — من غير قيمة. هنا تحدد سعر النقلة وتؤكد أو ترفض،
+        فينزل إيراد للعنبر ودين على تاجر السبلة عند التأكيد فقط.
       </p>
       <div id="requests-sebla-list" style="display:flex; flex-direction:column; gap:14px;">
         <!-- Rendered dynamically -->
@@ -7814,17 +7814,20 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                                 <span class="status-pill pill-warning">بانتظار السعر</span>
                             </div>
                             <div style="font-size:0.92rem; line-height:1.8; background:#fffbeb; border-radius:10px; padding:10px 14px; margin-bottom:12px;">
-                                كمية السبلة: <strong>${farmtyAdminNum(s.qty).toLocaleString('ar-EG')}</strong> طن/شيكارة
+                                عدد النقلات: <strong>${farmtyAdminNum(s.qty).toLocaleString('ar-EG')}</strong> نقلة
                                 — تاجر السبلة: <strong>${mzEscape(s.trader_name || 'غير محدد')}</strong>
                             </div>
                             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                                 <div style="display:flex; flex-direction:column; gap:4px;">
-                                    <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">سعر الشيكارة/الطن (ج.م):</label>
+                                    <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">سعر النقلة (ج.م):</label>
                                     <input type="number" id="other-price-${s.id}" min="0" step="0.01" placeholder="السعر"
                                         style="width:150px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-weight:700;">
                                 </div>
                                 <button onclick="ownerConfirmOtherSale(${s.id})" style="background:linear-gradient(135deg,#ca8a04,#a16207); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-weight:800; cursor:pointer;">
                                     ✅ تأكيد البيع بالسعر
+                                </button>
+                                <button onclick="ownerRejectOtherSale(${s.id})" style="background:#fff; color:#dc2626; border:1.5px solid #fecaca; border-radius:10px; padding:10px 18px; font-weight:900; cursor:pointer;">
+                                    ✖ رفض الطلب
                                 </button>
                             </div>
                         </div>`).join('');
@@ -7859,9 +7862,39 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                                 <button onclick="ownerConfirmOtherSale(${s.id})" style="background:linear-gradient(135deg,#4f46e5,#4338ca); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-weight:800; cursor:pointer;">
                                     ✅ تأكيد البيع بالسعر
                                 </button>
+                                <button onclick="ownerRejectOtherSale(${s.id})" style="background:#fff; color:#dc2626; border:1.5px solid #fecaca; border-radius:10px; padding:10px 18px; font-weight:900; cursor:pointer;">
+                                    ✖ رفض الطلب
+                                </button>
                             </div>
                         </div>`).join('');
                 }
+            }
+        }
+
+        async function ownerRejectOtherSale(saleId) {
+            const sales = (farmtyAdminState && farmtyAdminState.otherSales) || [];
+            const sale = sales.find(x => Number(x.id) === Number(saleId));
+            if (!sale) { showMiniToast('الطلب غير موجود', 'red'); return; }
+            const unit = String(sale.sale_type) === 'سبلة' ? 'نقلة' : 'شيكارة';
+            const description = `${sale.sale_type} — ${farmtyAdminNum(sale.qty).toLocaleString('ar-EG')} ${unit}`;
+            if (!confirm(`هل أنت متأكد من رفض طلب بيع ${description}؟\n\nلن يُسجل إيراد أو دين، ولن يُخصم أي رصيد.`)) return;
+            try {
+                const { error } = await sbClient.rpc('mazraaty_reject_other_sale', {
+                    p_sale_id: Number(saleId),
+                    p_rejected_by: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك',
+                    p_reason: ''
+                });
+                if (error) throw error;
+                sale.status = 'rejected';
+                sale.rejected_at = new Date().toISOString();
+                if (typeof mzApplyExtraData === 'function') mzApplyExtraData();
+                if (typeof ownerRenderRequests === 'function') ownerRenderRequests();
+                if (typeof scheduleAdminReload === 'function') scheduleAdminReload();
+                if (typeof mzLoadExtraData === 'function') mzLoadExtraData();
+                showMiniToast('تم رفض الطلب — لم يُسجل أي إيراد أو خصم', 'green');
+            } catch (error) {
+                console.error('ownerRejectOtherSale error:', error);
+                showMiniToast('تعذر رفض الطلب: ' + (error.message || error), 'red');
             }
         }
 
@@ -9535,7 +9568,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                             <td><strong style="color:var(--text-main);">${typeIcon} ${mzEscape(s.sale_type)}</strong></td>
                             <td>${farmtyShedNameById(s.shed_id)}</td>
                             <td><span class="status-pill pill-ok">مباشر (محصّل)</span></td>
-                            <td style="font-weight:700;">${farmtyAdminNum(s.qty)} ${s.sale_type === 'سبلة' ? 'طن/شيكارة' : 'شيكارة'}</td>
+                            <td style="font-weight:700;">${farmtyAdminNum(s.qty)} ${s.sale_type === 'سبلة' ? 'نقلة' : 'شيكارة'}</td>
                             <td style="color:var(--success); font-weight:700;">${farmtyAdminNum(s.total_amount || 0).toLocaleString('ar-EG')} ج.م</td>
                             <td>نقدي</td>
                             <td>${mzEscape(s.supervisor || '-')}</td>
@@ -17211,5 +17244,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f606e76e02e27a',t:'MTc4NzQ0NTIxOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2fbc2452de7e27e',t:'MTc4NzUwNTMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

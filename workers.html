@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين — Safe Report Editing 19</title>
+    <title>منظومة إدارة عنابر المزرعة - صفحة المشرفين — Sebla Trips 20</title>
     <!-- Font Awesome & Google Fonts -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -1525,12 +1525,12 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>كمية السبلة المباعة (طن / شيكارة): <span style="color:var(--danger);">*</span></label>
-                            <input type="number" id="p2s-qty" placeholder="اكتب الكمية" min="0.01" step="0.01" required>
+                            <label>عدد نقلات السبلة المباعة: <span style="color:var(--danger);">*</span></label>
+                            <input type="number" id="p2s-qty" placeholder="مثال: 1 أو 1.5 أو 2" min="0.5" step="0.5" required>
                         </div>
                     </div>
                     <div style="font-size:0.85rem;color:var(--primary);font-weight:800;background:#e8f5e9;padding:8px 12px;border-radius:8px;margin-bottom:12px;" id="p2s-banner-note">
-                        🌾 سيتم إرسال طلب بيع سبلة للمالك — هو اللي يحدد سعر الطن، وينزل إيراد للعنبر ودين على تاجر السبلة.
+                        🌾 سيتم إرسال عدد النقلات للمالك — هو اللي يحدد سعر النقلة، وينزل إيراد للعنبر ودين على تاجر السبلة عند التأكيد.
                     </div>
                     <button type="submit" class="btn-submit" style="background-color: var(--accent);"><i class="fa-solid fa-check"></i> إرسال طلب بيع السبلة</button>
                 </form>
@@ -4463,7 +4463,13 @@ async function handleOtherSaleSubmit(event, saleType) {
     const trader = isSacks ? '' : (document.getElementById('p2s-trader')?.value || '').trim();
 
     if (!supervisor) { alert('اكتب اسم المشرف البائع أولاً.'); return; }
-    if (qty <= 0) { alert('اكتب الكمية المباعة (أكبر من صفر).'); return; }
+    if (qty <= 0) { alert(isSacks ? 'اكتب عدد الشكاير المباعة.' : 'اكتب عدد نقلات السبلة.'); return; }
+    if (!isSacks && Math.abs(qty * 2 - Math.round(qty * 2)) > 0.000001) {
+        alert('عدد نقلات السبلة يكون بنصف نقلة: 0.5 أو 1 أو 1.5 أو 2 وهكذا.'); return;
+    }
+    if (isSacks && !Number.isInteger(qty)) {
+        alert('عدد الشكاير الفارغة يجب أن يكون عددًا صحيحًا.'); return;
+    }
     if (!isSacks && !trader) { alert('اختر اسم تاجر السبلة أولاً.'); return; }
 
     // منع بيع شكاير فارغة أكثر من المتاح
@@ -4493,10 +4499,11 @@ async function handleOtherSaleSubmit(event, saleType) {
         });
         if (error) throw error;
 
+        const unitLabel = isSacks ? 'شيكارة' : 'نقلة';
         if (typeof farmtyShowToast === 'function') {
-            farmtyShowToast(`✅ تم إرسال طلب بيع ${saleType} (${qty.toLocaleString('ar-EG')}) للمالك — بانتظار تحديد السعر`);
+            farmtyShowToast(`✅ تم إرسال طلب بيع ${saleType} (${qty.toLocaleString('ar-EG')} ${unitLabel}) للمالك — بانتظار تحديد السعر`);
         } else {
-            alert(`تم إرسال طلب بيع ${saleType} (${qty.toLocaleString('ar-EG')}) للمالك — هو اللي يحدد السعر وينزله إيراد للعنبر.`);
+            alert(`تم إرسال طلب بيع ${saleType} (${qty.toLocaleString('ar-EG')} ${unitLabel}) للمالك — هو اللي يحدد السعر وينزله إيراد للعنبر.`);
         }
         form.reset();
         if (isSacks) switchSaleType('sacks');
@@ -5025,5 +5032,5 @@ checkPassword = async function() {
 };
 
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f60edf7bc4e27a',t:'MTc4NzQ0NTU0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a27e9e877916e274',t:'MTc4NjE5MzEzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b96e5dffa0e1f1',t:'MTc4NjgwOTgyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2d56292bedee28c',t:'MTc4NzEwMjk0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2fbc3da9b70e27e',t:'MTc4NzUwNTM4Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
