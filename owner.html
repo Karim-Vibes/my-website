@@ -7049,23 +7049,49 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
       // رسالة تأكيد قبل الحفظ لتجنب الحفظ بالغلط
       if(!confirm(`هل أنت متأكد من تغيير كلمة مرور "${shedName}" إلى:\n\n${pass}\n\nسيتم استخدامها في دخول المشرف لهذا العنبر.`)) return;
       ownerSetBarnPassword(shedId, pass);
-      // مزامنة حقيقية مع Supabase: 1) الإعدادات 2) دالة التحقق الجديدة (بتقرأ منها صفحة المشرفين)
+      // ⚠️ إصلاح (41) — حفظ آمن لا يمسح باسوردات باقي العنابر:
+      // مفيش رفع لخريطة الباسوردات كاملة من المتصفح خالص (ده كان بيمسح
+      // باسوردات العنابر الناقصة من نسخة الجهاز). بنسجّل مفتاح العنبر ده بس.
       let cloudOk = false;
       try {
         if(typeof sbClient !== 'undefined' && sbClient){
-          const map = ownerGetBarnPasswords();
-          if (typeof saveFarmtySetting === 'function') {
-            await saveFarmtySetting('barn_passwords', map);
-          }
-          // تحديث دالة التحقق مباشرة — لو موجودة (بعد تشغيل ملف SQL الجديد)
+          // 1) الطريق الأساسي الآمن: دالة الداتابيز تسجّل مفتاح هذا العنبر وحده
+          let rpcWorked = false;
           try {
             const rpcRes = await sbClient.rpc('mazraaty_set_shed_password', {
               p_shed_id: Number(shedId),
               p_password: pass
             });
-            if (rpcRes.error) throw rpcRes.error;
+            if (rpcRes && rpcRes.error) throw rpcRes.error;
+            rpcWorked = true;
           } catch(rpcErr) {
-            console.warn('set_shed_password RPC غير متاحة (شغّل ملف SQL للتفعيل)', rpcErr);
+            console.warn('set_shed_password RPC غير متاحة — سيتم استخدام الدمج الآمن', rpcErr);
+          }
+          // 2) بديل آمن لو الدالة مش موجودة: نجيب خريطة الباسوردات من الداتابيز
+          //    نفسها، نضيف مفتاح هذا العنبر فقط فوقها، ونرجّعها — دمج مش استبدال
+          if (!rpcWorked) {
+            const { data: cloudRow, error: fetchErr } = await sbClient
+              .from(FARMITY_ADMIN_TABLES.settings)
+              .select('key,value')
+              .eq('key', 'barn_passwords')
+              .maybeSingle();
+            if (fetchErr) throw fetchErr;
+            let cloudMap = {};
+            try {
+              cloudMap = (cloudRow && cloudRow.value)
+                ? (typeof cloudRow.value === 'string' ? JSON.parse(cloudRow.value) : cloudRow.value)
+                : {};
+            } catch(pErr){ cloudMap = {}; }
+            if (!cloudMap || typeof cloudMap !== 'object') cloudMap = {};
+            cloudMap[String(Number(shedId))] = pass;
+            if (typeof saveFarmtySetting === 'function') {
+              await saveFarmtySetting('barn_passwords', cloudMap);
+            } else {
+              const { error: upErr } = await sbClient
+                .from(FARMITY_ADMIN_TABLES.settings)
+                .upsert({ key: 'barn_passwords', value: cloudMap }, { onConflict: 'key' });
+              if (upErr) throw upErr;
+            }
           }
           cloudOk = true;
         }
@@ -17244,5 +17270,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2fbc2452de7e27e',t:'MTc4NzUwNTMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a30850a418d0f5c5',t:'MTc4NzYzNjk4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
