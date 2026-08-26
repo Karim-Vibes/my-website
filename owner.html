@@ -3894,6 +3894,7 @@ window.MZ_SESSION = 'mz_session_v2';
         <span style="font-size:1.2rem;">🕵️</span> سجل التعديلات ومراقبة النظام (Audit Log)
       </div>
       <span style="font-size:0.78rem; color:var(--text-muted);">آخر 100 إجراء حساس: تعديل سعر، تغيير تاجر، اعتماد تكلفة، تصفية دورة...</span>
+      <button type="button" id="auditShowReportsBtn" onclick="farmtyToggleAuditReports()" style="margin-inline-start:auto; background:#fff; border:1px solid #cbd5e1; border-radius:99px; padding:5px 14px; font-size:0.75rem; font-weight:800; color:#475569; cursor:pointer; white-space:nowrap;">📋 إظهار تقارير المشرفين</button>
     </div>
     <div class="table-wrapper" style="overflow-x:auto;">
       <table class="dashboard-table" style="width:100%; font-size:0.82rem; min-width:900px;">
@@ -5744,25 +5745,38 @@ if (typeof window.supabase === "undefined") {
 
     // تسجيل صف في جدول المدفوعات (mazraaty_payments) + المحلي — مصدر تحصيلات اليوم
     // الصف المحلي: [التاريخ, اسم الطرف, النوع, المبلغ, الطريقة, الوقت]
-    async function farmtyRecordPaymentToCloud(partyName, amount, method, movementType) {
+    async function farmtyRecordPaymentToCloud(partyName, amount, method, movementType, note) {
         try {
             const now = new Date();
             const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             const row = {
                 payment_date: ownerGetTodayKey(),
-                party_name: partyName,
-                movement_type: movementType || 'collection',
+                // ⚠️ إصلاح (44): عمود الطرف في جدول المدفوعات اسمه trader_name —
+                // الكود القديم كان بيبعت party_name (عمود مش موجود في القاعدة)
+                // فكل دفعات نموذج السداد كانت بتضيع بصمت من غير ما تتسجل.
+                trader_name: partyName,
                 amount: mzNum(amount),
                 method: method || 'كاش'
             };
             // 1) محلياً فوراً (حتى يظهر في الكارت والجدول من غير انتظار)
             if (typeof payments !== 'undefined' && Array.isArray(payments)) {
-                payments.unshift([row.payment_date, row.party_name, movementType === 'collection' ? 'تحصيل' : 'دفع', row.amount, row.method, timeStr]);
+                payments.unshift([row.payment_date, partyName, movementType === 'collection' ? 'تحصيل' : 'دفع', row.amount, row.method, timeStr]);
             }
             // 2) في القاعدة (الاسم النصي للجدول لضمان التوافق من أي سكوب)
             if (typeof sbClient !== 'undefined' && sbClient) {
                 const { error } = await sbClient.from('mazraaty_payments').insert(row);
                 if (error) throw error;
+                // أوديت: تسجيل الدفعة في سجل التعديلات
+                try {
+                    await sbClient.rpc('mazraaty_log_action', {
+                        p_action_type: movementType === 'collection' ? 'تحصيل دفعة من تاجر' : 'دفع مبلغ لتاجر',
+                        p_table_name: 'mazraaty_payments',
+                        p_record_id: null,
+                        p_old_value: null,
+                        p_new_value: { party: partyName, amount: mzNum(amount), method: method || 'كاش', date: row.payment_date, note: note || '' },
+                        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                    });
+                } catch (auditErr) { console.warn('audit log error:', auditErr); }
             }
             return true;
         } catch (e) {
@@ -5905,7 +5919,7 @@ if (typeof window.supabase === "undefined") {
       renderAll(); showMiniToast('تم تأكيد الصفقة وإضافتها على حساب التاجر');
     }
     function markDealPaid(id, method='كاش'){
-      if(currentRole!=='محاسب'){showMiniToast('تسجيل التحصيل للمحاسب فقط','red'); return;}
+      if(currentRole!=='محاسب' && currentRole!=='المالك'){showMiniToast('تسجيل التحصيل للمحاسب فقط','red'); return;}
       const d=saleDeals.find(x=>x.id===id); if(!d) return;
       if(d.status==='pending'){confirmDeal(id);} 
       d.status='paid'; d.paidAt=`${DATA_DATE} ${nowTime()}`; d.method=method; d.collectedAmount=dealNet(d);
@@ -5927,7 +5941,7 @@ if (typeof window.supabase === "undefined") {
         <div class="deal-request-meta">${dealStatusPill(d.status)} <span>${d.price?m(d.price):'السعر ينتظر المالك'}</span></div>
         <div class="deal-actions">
           ${d.status==='pending' && currentRole==='المالك'?`<button class="mini-action" onclick="confirmDeal(${d.id})">موافقة المالك</button>`:''}
-          ${d.status!=='paid' && d.status!=='pending' && currentRole==='محاسب'?`<button class="mini-action" onclick="markDealPaid(${d.id},'كاش')">تحصيل كاش</button><button class="mini-action" onclick="markDealPaid(${d.id},'تحويل بنكي')">تحويل</button>`:''}
+          ${d.status!=='paid' && d.status!=='pending' && (currentRole==='محاسب'||currentRole==='المالك')?`<button class="mini-action" onclick="markDealPaid(${d.id},'كاش')">تحصيل كاش</button><button class="mini-action" onclick="markDealPaid(${d.id},'تحويل بنكي')">تحويل</button>`:''}
           ${currentRole==='مشرف'?'<span class="muted">تم الإرسال للمالك/الحسابات</span>':''}
         </div>
       </div>`).join('');
@@ -6052,7 +6066,7 @@ if (typeof window.supabase === "undefined") {
         <div class="live-calc-box ${mortality>6?'red':mortality>3?'yellow':'green'}"><strong>${n(current)}</strong><span>الفراخ بعد طرح النافق</span></div>`;
     }
     function submitSupervisorReport(){
-      if(currentRole!=='مشرف'){showMiniToast('صلاحية الإرسال للمشرف فقط','red'); return;}
+      if(currentRole!=='مشرف' && currentRole!=='المالك'){showMiniToast('صلاحية الإرسال للمشرف فقط','red'); return;}
       const b=getSelectedSupervisorBarn();
       if(!b){showMiniToast('اختر العنبر أولاً','red'); return;}
       currentSupervisorName = b.supervisor || currentSupervisorName || 'مشرف العنبر';
@@ -6374,7 +6388,7 @@ if (typeof window.supabase === "undefined") {
     }
 
     function newTraderAccount(){
-      if(currentRole!=='محاسب'){showMiniToast('تعديل حسابات التجار للمحاسب فقط','red'); return;}
+      if(currentRole!=='محاسب' && currentRole!=='المالك'){showMiniToast('تعديل حسابات التجار للمحاسب فقط','red'); return;}
       document.getElementById('traderEditIndex').value='-1';
       document.getElementById('traderEditName').value='';
       document.getElementById('traderEditDebit').value=0;
@@ -6424,7 +6438,7 @@ if (typeof window.supabase === "undefined") {
     }
 
     function deleteTraderAccount(){
-      if(currentRole!=='محاسب'){showMiniToast('حذف حسابات التجار للمحاسب فقط','red'); return;}
+      if(currentRole!=='محاسب' && currentRole!=='المالك'){showMiniToast('حذف حسابات التجار للمحاسب فقط','red'); return;}
       const idx=parseInt(document.getElementById('traderEditIndex').value,10);
       if(idx<0 || !traders[idx]){ showMiniToast('اختر تاجر من الجدول أولاً','yellow'); return; }
       const name=traders[idx].name;
@@ -10260,6 +10274,20 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                         .catch(e => console.error('debit edit sync error:', e));
                 }
 
+                // أوديت: تسجيل تعديل إجمالي المديونية (قلم الجدول) في سجل التعديلات
+                try {
+                    if (typeof sbClient !== 'undefined' && sbClient) {
+                        sbClient.rpc('mazraaty_log_action', {
+                            p_action_type: 'تعديل إجمالي المديونية',
+                            p_table_name: 'mazraaty_traders',
+                            p_record_id: tr.dbId ? Number(tr.dbId) : null,
+                            p_old_value: { trader: traderName, debt: oldBalance },
+                            p_new_value: { trader: traderName, debt: newDebit },
+                            p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                        }).catch(()=>{});
+                    }
+                } catch(ae) {}
+
                 alert(`تم تعديل إجمالي المديونية للتاجر (${traderName}) إلى ${tr.balance.toLocaleString('ar-EG')} ج.م بنجاح.`);
                 farmtyCloseTradersModal();
                 if (typeof renderTraders === 'function') renderTraders();
@@ -10284,6 +10312,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
 
             document.getElementById('traders-modal-save-btn').onclick = async function() {
                 const newLimit = parseFloat(document.getElementById('edit-trader-limit-val')?.value) || 0;
+                const oldCreditLimit = mzNum(tr.limit);
                 tr.limit = newLimit;
 
                 const isExceeded = (Number(tr.limit) > 0 && Number(tr.balance) > Number(tr.limit));
@@ -10299,7 +10328,20 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                             .from('mazraaty_traders')
                             .update({ credit_limit: mzNum(newLimit) })
                             .eq('name', traderName);
-                        if (!error) cloudOk = true;
+                        if (!error) {
+                            cloudOk = true;
+                            // أوديت: تسجيل تعديل الحد الائتماني في سجل التعديلات
+                            try {
+                                sbClient.rpc('mazraaty_log_action', {
+                                    p_action_type: 'تعديل حد ائتمان تاجر',
+                                    p_table_name: 'mazraaty_traders',
+                                    p_record_id: null,
+                                    p_old_value: { name: traderName, limit: oldCreditLimit },
+                                    p_new_value: { name: traderName, limit: mzNum(newLimit) },
+                                    p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                                }).catch(()=>{});
+                            } catch (ae) {}
+                        }
                     }
                 } catch(e) { console.error('limit sync error:', e); }
 
@@ -10342,10 +10384,11 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                 <button class="btn-action btn-primary" id="traders-modal-save-btn" style="padding:10px 24px; font-weight:800; background:#2563eb; color:#fff; font-size:0.95rem; margin-top:16px; width:100%;">💾 حفظ التحديثات</button>
             `;
 
-            document.getElementById('traders-modal-save-btn').onclick = function() {
+            document.getElementById('traders-modal-save-btn').onclick = async function() {
+                const oldName = tr.name;
                 const newName = document.getElementById('edit-trader-name')?.value.trim() || tr.name;
                 const newLimit = parseFloat(document.getElementById('edit-trader-limit-field')?.value) || tr.limit;
-                const newPhone = document.getElementById('edit-trader-phone')?.value.trim() || tr.phone;
+                const newPhone = document.getElementById('edit-trader-phone')?.value.trim() || tr.phone || '';
 
                 tr.name = newName;
                 tr.limit = newLimit;
@@ -10356,7 +10399,33 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
 
                 localStorage.setItem('owner_custom_traders', JSON.stringify(traders));
 
-                alert(`تم حفظ التعديلات لحساب التاجر (${newName}) بنجاح.`);
+                // ⚠️ إصلاح (47): الحفظ بيوصل للقاعدة فعليًا — الكود القديم كان محليًا بس
+                // فالتعديل كان بيضيع مع الريفريش. ولو الاسم اتغير، الدالة بتنقل كل السجلات
+                // القديمة (مبيعات بيض/سبل/مدفوعات) للاسم الجديد في عملية واحدة وبتسجل
+                // التعديل في سجل التعديلات تلقائيًا.
+                let cloudOk = false;
+                try {
+                    if (typeof sbClient !== 'undefined' && sbClient) {
+                        const { error } = await sbClient.rpc('mazraaty_save_trader_profile', {
+                            p_old_name: oldName,
+                            p_new_name: newName,
+                            p_limit: mzNum(newLimit),
+                            p_phone: newPhone,
+                            p_user: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                        });
+                        if (error) throw error;
+                        cloudOk = true;
+                        if (typeof farmtyRefreshTradersFromCloud === 'function') { try { await farmtyRefreshTradersFromCloud(); } catch (e) {} }
+                    }
+                } catch (e) {
+                    console.error('trader profile sync error:', e);
+                }
+
+                if (typeof showMiniToast === 'function') {
+                    showMiniToast(cloudOk
+                        ? `تم حفظ بيانات التاجر (${newName}) ومزامنتها مع القاعدة`
+                        : 'تم الحفظ محليًا — تعذرت المزامنة مع القاعدة', cloudOk ? 'green' : 'red');
+                }
                 farmtyCloseTradersModal();
                 if (typeof renderTraders === 'function') renderTraders();
             };
@@ -10588,6 +10657,19 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                     }, { onConflict: 'name' }).catch(()=>{});
                 }
             } catch(e){}
+            // أوديت: تسجيل إضافة التاجر في سجل التعديلات
+            try {
+                if (typeof sbClient !== 'undefined' && sbClient) {
+                    sbClient.rpc('mazraaty_log_action', {
+                        p_action_type: 'إضافة تاجر',
+                        p_table_name: 'mazraaty_traders',
+                        p_record_id: null,
+                        p_old_value: null,
+                        p_new_value: { name: newTrader.name, type: traderType, limit: limit },
+                        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                    }).catch(()=>{});
+                }
+            } catch(ae) {}
 
             alert(`تم إضافة التاجر (${name.trim()}) بنجاح ضمن ${isLitter ? 'تجار السبلة' : 'تجار البيض'}! سيظهر في القوائم والمشرفين.`);
             if (typeof renderTraders === 'function') renderTraders();
@@ -10614,6 +10696,19 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                 }
             } catch (e) {
                 console.error('farmtyDeleteTrader cloud error:', e);
+            }
+            // أوديت: تسجيل حذف (إيقاف) التاجر في سجل التعديلات
+            if (cloudOk) {
+                try {
+                    sbClient.rpc('mazraaty_log_action', {
+                        p_action_type: 'حذف (إيقاف) تاجر',
+                        p_table_name: 'mazraaty_traders',
+                        p_record_id: null,
+                        p_old_value: { name: traderName, balance: Number(tr.balance) || 0 },
+                        p_new_value: null,
+                        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                    }).catch(()=>{});
+                } catch (ae) {}
             }
 
             // 2) الحذف من القائمة المحلية
@@ -10672,7 +10767,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
 
             // ===== تسجيل التحصيل في المصدر الموحد (جدول المدفوعات + المحلي) =====
             if (typeof farmtyRecordPaymentToCloud === 'function') {
-                farmtyRecordPaymentToCloud(traderName, totalReduction, method, 'collection')
+                farmtyRecordPaymentToCloud(traderName, totalReduction, method, 'collection', discount > 0 ? ('يشمل خصم/سماح ' + discount.toLocaleString('ar-EG') + ' ج.م') : '')
                     .then(ok => {
                         if (typeof farmtySyncTraderToCloud === 'function') return farmtySyncTraderToCloud(tr);
                     })
@@ -11226,7 +11321,7 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                         <button class="btn-edit-icon" onclick="ownerOpenBirdsModal(${shed.id}, '${shed.name}', ${effectiveBirds})">${ownerGetPenIcon()}</button>
                     </td>
 
-                    <td style="color:var(--text-muted); font-size:0.8rem;">${shed.sups.join(' ، ')}</td>
+                    <td style="color:var(--text-muted); font-size:0.8rem;">${(() => { const cloudRow = (typeof farmtyAdminState !== 'undefined' && farmtyAdminState && farmtyAdminState.sheds) ? farmtyAdminState.sheds.get(Number(shed.id)) : null; const supsList = (cloudRow && Array.isArray(cloudRow.supervisors) && cloudRow.supervisors.length) ? cloudRow.supervisors : (Array.isArray(shed.sups) ? shed.sups : []); return supsList.join(' ، '); })()}</td>
                 `;
                 tableBody.appendChild(tr);
                 // ضغطة على الصف → فتح صفحة كاملة تعرض كل بيانات العنبر (بدون تمرير أفقي)
@@ -11588,6 +11683,17 @@ function selectBarn(id){selectedBarnId=id; renderMapDetails();}
                                 sale_date: today
                             }).catch(()=>{});
                         }
+                        // أوديت: تسجيل شحنة البيض المباشرة (إيراد + دَين على التاجر)
+                        try {
+                            sbClient.rpc('mazraaty_log_action', {
+                                p_action_type: 'تسجيل شحنة بيض (مباشر)',
+                                p_table_name: 'mazraaty_egg_sales',
+                                p_record_id: null,
+                                p_old_value: null,
+                                p_new_value: { shed: shedName, trader: traderName, trays: cartonsSold, egg: eggType === 'red' ? 'أحمر' : 'أبيض', price: pricePerCarton, revenue: shipmentRevenue, debt_added: shipmentRevenue },
+                                p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+                            }).catch(()=>{});
+                        } catch(ae) {}
                     }
                 } catch(e){}
 
@@ -12552,6 +12658,17 @@ ownerSavePrices = function() {
     saveFarmtySetting('market_prices', prices),
     saveFarmtySetting('custom_suppliers', suppliers)
   ]).then(() => {
+    // أوديت: تسجيل حفظ الأسعار اليومية في سجل التعديلات
+    try {
+      sbClient.rpc('mazraaty_log_action', {
+        p_action_type: 'حفظ أسعار يومية',
+        p_table_name: 'mazraaty_settings',
+        p_record_id: null,
+        p_old_value: null,
+        p_new_value: prices,
+        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+      }).catch(()=>{});
+    } catch(ae) {}
     farmtyAdminSetStatus(`تم حفظ الأسعار — ${nowTime()}`, 'ok');
     showMiniToast('تمت مزامنة الأسعار مع صفحة المشرف', 'green');
   }).catch(error => {
@@ -12625,6 +12742,17 @@ async function pushShedSettings(shedId) {
     }
     if (error) throw error;
     farmtyAdminState.sheds.set(Number(shedId), data);
+    // أوديت: تسجيل تعديل إعدادات العنبر (عمر/فراخ/كوتة/مورد/نوع) في سجل التعديلات
+    try {
+      sbClient.rpc('mazraaty_log_action', {
+        p_action_type: 'تعديل إعدادات عنبر',
+        p_table_name: 'mazraaty_sheds',
+        p_record_id: Number(shedId),
+        p_old_value: { birds: farmtyAdminNum(current.birds), quota: farmtyAdminNum(current.daily_quota), supplier: current.supplier || '', age_days: farmtyAdminNum(current.age_days), bird_type: current.bird_type || '' },
+        p_new_value: { birds: payload.birds, quota: payload.daily_quota, supplier: payload.supplier, age_days: payload.age_days, bird_type: payload.bird_type },
+        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+      }).catch(()=>{});
+    } catch(ae) {}
     farmtyAdminSetStatus(`تم تحديث العنبر ${shedId} — ${nowTime()}`, 'ok');
     return true;
   } catch (e) {
@@ -12639,6 +12767,17 @@ async function pushShedSettings(shedId) {
         .single();
       if (retry.error) throw retry.error;
       farmtyAdminState.sheds.set(Number(shedId), retry.data);
+      // أوديت: تسجيل تعديل إعدادات العنبر (مسار احتياطي) في سجل التعديلات
+      try {
+        sbClient.rpc('mazraaty_log_action', {
+          p_action_type: 'تعديل إعدادات عنبر',
+          p_table_name: 'mazraaty_sheds',
+          p_record_id: Number(shedId),
+          p_old_value: { birds: farmtyAdminNum(current.birds), quota: farmtyAdminNum(current.daily_quota), supplier: current.supplier || '', age_days: farmtyAdminNum(current.age_days) },
+          p_new_value: { birds: basePayload.birds, quota: basePayload.daily_quota, supplier: basePayload.supplier, age_days: basePayload.age_days },
+          p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'المالك'
+        }).catch(()=>{});
+      } catch(ae) {}
       farmtyAdminSetStatus(`تم تحديث العنبر ${shedId} — ${nowTime()}`, 'ok');
       return true;
     } catch (e2) {
@@ -13555,13 +13694,31 @@ async function loadVaccineHistoryLog() {
 }
 
 // ===================== سجل التعديلات (Audit Log) =====================
+// افتراضيًا: شاشة السجل بتعرض تعديلات الفلوس والإعدادات الحساسة بس.
+// تقارير المشرفين لسه بتتسجل في الجدول كاملة — الزرار بيظهرها لما تحتاجها.
+let farmtyAuditShowReports = false;
+function farmtyToggleAuditReports() {
+    farmtyAuditShowReports = !farmtyAuditShowReports;
+    const btn = document.getElementById('auditShowReportsBtn');
+    if (btn) {
+        btn.textContent = farmtyAuditShowReports
+            ? '💰 إظهار التعديلات الحساسة فقط'
+            : '📋 إظهار تقارير المشرفين';
+    }
+    loadAuditLog();
+}
+
 async function loadAuditLog() {
     const tbody = document.getElementById('auditLogTable');
     if (!tbody) return;
     if (typeof sbClient === 'undefined' || !sbClient) return;
     try {
-        const { data, error } = await sbClient.from('mazraaty_audit_log')
+        let q = sbClient.from('mazraaty_audit_log')
             .select('*').order('id', { ascending: false }).limit(100);
+        if (!farmtyAuditShowReports) {
+            q = q.not('action_type', 'in', '("حفظ تقرير يومي","تعديل تقرير يومي")');
+        }
+        const { data, error } = await q;
         if (error) throw error;
         const rows = data || [];
         if (!rows.length) {
@@ -14903,8 +15060,11 @@ function mzApplyExtraData() {
         }
     } catch (e) { /* تجاهل */ }
     return [
-        row.payment_date, row.party_name,
-        row.movement_type === 'collection' ? 'تحصيل' : 'دفع',
+        row.payment_date,
+        // ⚠️ إصلاح (44): عمود الطرف في القاعدة اسمه trader_name (مش party_name) —
+        // بنقرأ الاتنين للأمان لو العمود اتضاف بعدين.
+        row.party_name || row.trader_name || '',
+        (row.movement_type || 'collection') === 'collection' ? 'تحصيل' : 'دفع',
         mzNum(row.amount), row.method, timeStr
     ];
   }));
@@ -14987,6 +15147,10 @@ loadAdminSharedData = async function() {
   ]);
   // التطبيق الأخير بس لو في اتصال سحابي (من غيره نحافظ على البيانات المحلية)
   if (usable) { try { mzApplyExtraData(); } catch (e) { console.warn('final apply warning:', e); } }
+  // ⚠️ إصلاح (44): رسم نهائي مضمون بعد اكتمال كل التحميل —
+  // كان ممكن آخر رسمة للجدول الرئيسي تحصل قبل ما العنابر الجديدة ومشرفيها
+  // يخلصوا يتحمّلوا، فكانت أسماء المشرفين مش ظاهرة غير بعد التنقل بين الصفحات.
+  try { if (typeof ownerRenderDashboard === 'function') ownerRenderDashboard(); } catch (e) { console.warn('final dashboard render warning:', e); }
 };
 
 const mzCoreSubscribeAdminRealtime = subscribeAdminRealtime;
@@ -15262,7 +15426,7 @@ deleteRbacUser = async function(id) {
 
 // ========================= التقارير والاعتمادات =========================
 submitSupervisorReport = async function() {
-  if (currentRole !== 'مشرف') { showMiniToast('الإرسال للمشرف فقط','red'); return; }
+  if (currentRole !== 'مشرف' && currentRole !== 'المالك') { showMiniToast('الإرسال للمشرف فقط','red'); return; }
   const barn = getSelectedSupervisorBarn();
   if (!barn) return;
   const white = mzNum(document.getElementById('supEggWhite').value);
@@ -15349,7 +15513,7 @@ confirmDeal = async function(id) {
 };
 
 markDealPaid = async function(id, method='كاش') {
-  if (currentRole !== 'محاسب') { showMiniToast('التحصيل للمحاسب فقط','red'); return; }
+  if (currentRole !== 'محاسب' && currentRole !== 'المالك') { showMiniToast('التحصيل للمحاسب فقط','red'); return; }
   try {
     // ⚠️ الدالة mazraaty_mark_sale_paid بتعمل كل حاجة بشكل Atomic (ذرّي):
     // بتعلّم الطلبية paid + بتحدّث رصيد التاجر + بتسجل الدفعة في جدول المدفوعات —
@@ -15367,7 +15531,7 @@ markDealPaid = async function(id, method='كاش') {
 
 // ========================= حسابات التجار =========================
 saveTraderEdit = async function() {
-  if (currentRole !== 'محاسب') { showMiniToast('الحفظ للمحاسب فقط','red'); return; }
+  if (currentRole !== 'محاسب' && currentRole !== 'المالك') { showMiniToast('الحفظ للمحاسب فقط','red'); return; }
   const index = parseInt(document.getElementById('traderEditIndex').value,10);
   const current = index >= 0 ? traders[index] : null;
   const debit = mzNum(document.getElementById('traderEditDebit').value);
@@ -15390,6 +15554,17 @@ saveTraderEdit = async function() {
   try {
     const { error } = await sbClient.from(MAZRAATY_EXTRA_TABLES.traders).upsert(payload);
     if (error) throw error;
+    // أوديت: تسجيل تعديل حساب التاجر (مديونية/رصيد/حد) في سجل التعديلات
+    try {
+      await sbClient.rpc('mazraaty_log_action', {
+        p_action_type: 'تعديل حساب تاجر',
+        p_table_name: 'mazraaty_traders',
+        p_record_id: current && current.dbId ? Number(current.dbId) : null,
+        p_old_value: current ? { name: current.name, debit: mzNum(current.debit), credit: mzNum(current.credit), limit: mzNum(current.limit) } : null,
+        p_new_value: { name: payload.name, debit: debit, credit: credit, limit: limit },
+        p_user_name: (typeof currentUserName !== 'undefined' ? currentUserName : '') || 'محاسب'
+      });
+    } catch (auditErr) { console.warn('audit log error:', auditErr); }
     await loadAdminSharedData();
     newTraderAccount();
     showMiniToast('تم حفظ حساب التاجر في Supabase','green');
@@ -15399,7 +15574,7 @@ saveTraderEdit = async function() {
 };
 
 deleteTraderAccount = async function() {
-  if (currentRole !== 'محاسب') { showMiniToast('الحذف للمحاسب فقط','red'); return; }
+  if (currentRole !== 'محاسب' && currentRole !== 'المالك') { showMiniToast('الحذف للمحاسب فقط','red'); return; }
   const index = parseInt(document.getElementById('traderEditIndex').value,10);
   const trader = traders[index];
   if (!trader?.dbId || !confirm(`حذف ${trader.name}؟`)) return;
@@ -16880,9 +17055,14 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
       var r = farmtyOrigApplyExtra.apply(this, arguments);
       try {
         var local = JSON.parse(localStorage.getItem('owner_custom_traders') || '[]');
-        if (Array.isArray(local) && local.length) {
-          var names = {};
-          (traders||[]).forEach(function(t){ if(t && t.name) names[String(t.name)] = 1; });
+        var names = {};
+        (traders||[]).forEach(function(t){ if(t && t.name) names[String(t.name)] = 1; });
+        // ⚠️ إصلاح (43) — تجار الأشباح:
+        // الداتابيز هي المصدر. لو تجار السحاب وصلوا بنجاح → مفيش إعادة حقن
+        // لأي اسم محلي مش موجود في السحاب (كان بيرجّع التجار المحذوفين بديونهم
+        // القديمة لثواني قبل ما التحديث النضيف يمسحهم).
+        // بنحافظ على الحماية الأصلية في حالة واحدة بس: السحاب رجع فاضي (نت مقطوع).
+        if (!(traders||[]).length && Array.isArray(local) && local.length) {
           local.forEach(function(t){
             if (t && t.name && !names[String(t.name)]) {
               t.type = window.farmtyNormalizeTraderType(t.type, t.name);
@@ -16890,6 +17070,9 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
               names[String(t.name)] = 1;
             }
           });
+        } else if ((traders||[]).length) {
+          // نضّف نسخة المتصفح من أي اسم مش موجود في السحاب — الأشباح تموت نهائيًا
+          try { localStorage.setItem('owner_custom_traders', JSON.stringify(traders)); } catch(e2){}
         }
       } catch(e){}
       farmtyCanonicalizeTraderTypes();
@@ -17270,5 +17453,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a30850a418d0f5c5',t:'MTc4NzYzNjk4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a316479fbd05c84f',t:'MTc4Nzc4MzQxMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
