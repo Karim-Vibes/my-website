@@ -140,7 +140,7 @@ body:not(.mz-ready) #splashScreen{visibility:visible}
   }catch(e){}
 })();
 </script>
-<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — الإصدار 49</title>
+<title>بروتوتايب لوحة إدارة عنابر الدجاج البياض — الإصدار 50</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 
@@ -12628,10 +12628,12 @@ async function loadAdminSharedData() {
     wkStart.setDate(wkStart.getDate() - 6);
     const weekStartKey = wkStart.toISOString().slice(0, 10);
 
+    // ⚠️ إصلاح (50): نافذة آخر 7 أيام للمبيعات العادية + كل الطلبات المعلقة مهما كان عمرها —
+    // الطلبات المعلقة القديمة كانت بتختفي من شاشة الطلبات مع إنها لسه pending في القاعدة.
     const [shedsResult, reportsResult, salesResult, complaintsResult, settingsResult] = await Promise.all([
       sbClient.from(FARMITY_ADMIN_TABLES.sheds).select('*').order('id'),
       sbClient.from(FARMITY_ADMIN_TABLES.reports).select('*').eq('report_date', today),
-      sbClient.from(FARMITY_ADMIN_TABLES.sales).select('*').gte('sale_date', weekStartKey).order('created_at', { ascending: false }),
+      sbClient.from(FARMITY_ADMIN_TABLES.sales).select('*').or(`sale_date.gte.${weekStartKey},status.eq.pending`).order('created_at', { ascending: false }),
       sbClient.from(FARMITY_ADMIN_TABLES.complaints).select('*').neq('status', 'closed').order('created_at', { ascending: false }),
       sbClient.from(FARMITY_ADMIN_TABLES.settings).select('*')
     ]);
@@ -17511,5 +17513,5 @@ function hrCloseSalaryModal() { document.getElementById('hrSalaryModal').style.d
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a316a0b8de724dfe',t:'MTc4Nzc4NzA2Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
